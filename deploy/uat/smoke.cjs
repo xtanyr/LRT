@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 
 const baseUrl = (process.env.LRT_BASE_URL || 'https://rating.example.ru').replace(/\/$/, '');
 const password = process.env.UAT_PASSWORD;
+const registrationEnabled = process.env.ALLOW_SELF_REGISTRATION === 'true';
 const accounts = [
   ['admin@skuratovcoffee.ru', 'ADMIN'],
   ['coo@skuratovcoffee.ru', 'COO'],
@@ -40,9 +41,10 @@ async function main() {
   const registration = await request('/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: 'Public registration probe', email: `uat-probe-${Date.now()}@example.invalid`, password }),
+    body: JSON.stringify({ name: 'Public registration probe', email: accounts[0][0], password }),
   });
-  assert.equal(registration.status, 403, 'Public registration should be disabled for UAT');
+  assert.equal(registration.status, registrationEnabled ? 409 : 403,
+    registrationEnabled ? 'Enabled registration should reject the existing admin email without creating an account' : 'Public registration should be disabled for UAT');
   console.log(`UAT smoke passed at ${baseUrl}: health, all four role logins, profile access, registration gate.`);
 }
 

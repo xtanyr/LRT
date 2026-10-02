@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthProvider';
 import BrandMark from '../components/BrandMark';
 
@@ -168,6 +168,7 @@ export default function LoginPage() {
             <button type="button" className="btn btn-wide" onClick={() => { window.location.href = '/api/auth/google'; }}>
               Войти через Google
             </button>
+            <p className="login-switch">Нет аккаунта? <Link to="/register">Зарегистрироваться</Link></p>
           </form>
         )}
       </div>

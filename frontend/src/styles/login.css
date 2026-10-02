@@ -53,6 +53,32 @@
   gap: 14px;
 }
 
+.login-intro {
+  margin-bottom: 20px;
+}
+
+.login-intro h1 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.login-intro p,
+.login-hint,
+.login-switch {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.login-switch {
+  text-align: center;
+}
+
+.login-switch a {
+  font-weight: 600;
+}
+
 .field {
   display: flex;
   flex-direction: column;

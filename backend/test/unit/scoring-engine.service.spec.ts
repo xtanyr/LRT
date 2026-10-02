@@ -116,6 +116,13 @@ describe('calculateScore', () => {
 });
 
 describe('ScoringEngineService', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-15T12:00:00Z'));
+  });
+
+  afterEach(() => jest.useRealTimers());
+
   it('returns a locked report snapshot without reading live metrics or writing', async () => {
     const snapshot = { rating: 87.5, maxPoints: 100, results: [{ metricId: 1 }] };
     const prisma = {
