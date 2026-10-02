@@ -7,7 +7,7 @@ import LoadingState from '../../components/LoadingState';
 import '../../styles/pages.css';
 import './LeaderReportPage.css';
 
-type Report = { id?: number; coffeeShopId: number; year: number; month: number; revenue: string | number; drinksCount: string | number; status?: string; isLocked?: boolean; submittedAt?: string; metricValues: {metricId: number; absoluteValue: string | number | null}[]; analyses: {questionKey: string; content: string}[]; formData?: Record<string, any>; score?: {rating: number; results: {metricId: number; zone: string | null; pointsAwarded: number | null}[]} };
+type Report = { id?: number; coffeeShopId: number; year: number; month: number; revenue: string | number; drinksCount: string | number; status?: string; isLocked?: boolean; isEditable?: boolean; submittedAt?: string; metricValues: {metricId: number; absoluteValue: string | number | null}[]; analyses: {questionKey: string; content: string}[]; formData?: Record<string, any>; score?: {rating: number; results: {metricId: number; zone: string | null; pointsAwarded: number | null}[]} };
 type Metric = {id: number; name: string; code: string; unit: string; section: string; displayOrder: number};
 type Question = {questionKey: string; label: string; section: string; displayOrder: number};
 const blocks = ['Команда и гости', 'Labor Cost', 'Себестоимость', 'Расходы', 'Итоги месяца'];
@@ -55,16 +55,19 @@ export default function LeaderReportPage() {
  const [shopId,setShopId]=useState(0), [shops,setShops]=useState<{id:number;name:string}[]>([]);
  const [metrics,setMetrics]=useState<Metric[]>([]), [questions,setQuestions]=useState<Question[]>([]);
  const [report,setReport]=useState<Report|null>(null), [previous,setPrevious]=useState<Report|null>(null);
+ const [historicalEditingEnabled,setHistoricalEditingEnabled]=useState(false);
  const [activeBlock,setActiveBlock]=useState(0), [loading,setLoading]=useState(true), [saving,setSaving]=useState(false), [dirty,setDirty]=useState(false), [error,setError]=useState('');
  const [autosaveState,setAutosaveState]=useState<'idle'|'waiting'|'saving'|'error'>('idle');
  const [expandedAnalysisSection,setExpandedAnalysisSection]=useState<string|null>(null);
  const [year,month]=period.split('-').map(Number);
- const locked=report?.isLocked||Date.now()>=Date.UTC(year,month+1,1,-3);
+ const historical=Boolean(report?.isLocked||Date.now()>=Date.UTC(year,month+1,1,-3));
+ const locked=typeof report?.isEditable==='boolean'?!report.isEditable:!historicalEditingEnabled&&historical;
+ const testEditing=historical&&!locked;
  const overdue=Date.now()>=Date.UTC(year,month,10,9)&&report?.status!=='SUBMITTED';
  useEffect(()=>{
   let alive=true;
-  Promise.all([api.get('/metrics'),api.get('/coffee-shops'),api.get('/admin/analysis-questions')]).then(([m,s,q])=>{
-   if(!alive)return; setMetrics(unwrap(m));setQuestions(unwrap(q));const list=unwrap(s);setShops(list);const requested=Number(params.get('shop'));setShopId(list.some((s:{id:number})=>s.id===requested)?requested:list[0]?.id||0);if(!list.length)setLoading(false);
+  Promise.all([api.get('/metrics'),api.get('/coffee-shops'),api.get('/admin/analysis-questions'),api.get('/reports/editing-policy').catch(()=>({data:{historicalEditingEnabled:false}}))]).then(([m,s,q,policy])=>{
+   if(!alive)return; setMetrics(unwrap(m));setQuestions(unwrap(q));setHistoricalEditingEnabled(unwrap(policy)?.historicalEditingEnabled===true);const list=unwrap(s);setShops(list);const requested=Number(params.get('shop'));setShopId(list.some((s:{id:number})=>s.id===requested)?requested:list[0]?.id||0);if(!list.length)setLoading(false);
   }).catch(e=>{if(alive){setError(message(e));setLoading(false);}});
   return()=>{alive=false;};
  },[]);
@@ -95,14 +98,14 @@ export default function LeaderReportPage() {
   return zone==='TARGET'?' metric-zone-green':zone==='BELOW_TARGET'?' metric-zone-yellow':zone==='CRITICAL'?' metric-zone-red':'';
  };
  const input=(label:string,v:unknown,update:(s:string)=>void,className='')=><input className={'input'+className} aria-label={label} inputMode="decimal" value={String(v??'')} disabled={locked||saving} onChange={e=>update(e.target.value)}/>;
- const reportState=locked?'Исторический · только чтение':report?.status==='SUBMITTED'?'Заполнено':overdue?'Просрочено':'Не заполнено';
+ const reportState=locked?'Исторический · только чтение':testEditing?'Исторический · тестовое редактирование':report?.status==='SUBMITTED'?'Заполнено':overdue?'Просрочено':'Не заполнено';
  const saveStatus=error?error:autosaveState==='saving'?'Сохраняем изменения…':autosaveState==='waiting'?'Сохранение через 2 секунды':locked?'Редактирование закрыто':'Автосохранение включено';
  const activeAnalysisGroups=analysisSections.map(group=>({...group,questions:questions.filter(question=>question.section===group.section).sort((a,b)=>a.displayOrder-b.displayOrder)})).filter(group=>group.questions.length>0&&blockFor(group.section)===activeBlock);
  const activeQuestions=activeAnalysisGroups.flatMap(group=>group.questions);
  const answeredQuestions=activeQuestions.filter(question=>report?.analyses.some(answer=>answer.questionKey===question.questionKey&&answer.content.trim().length>=3)).length;
  return <div className="page leader-report">
       <div className="page-header leader-report-header"><div><h1 className="page-title">Отчёт за {period}</h1><div className="leader-report-meta"><span className="badge">{reportState}</span><span className={'leader-save-status '+(error?'is-error':autosaveState)} role={error?'alert':'status'} aria-live="polite">{saveStatus}</span></div></div><div className="page-actions"><button className="btn btn-primary" disabled={!report||locked||saving} onClick={()=>save(true)}>Отправить отчёт</button></div></div>
-  <div className="card leader-report-controls"><label><span>Кофейня</span><SelectControl label="Кофейня" value={shopId} disabled={dirty||saving} onChange={value=>setShopId(Number(value))} options={shops.map(s=>({value:s.id,label:s.name}))}/></label><label className="period-control"><span>Отчётный период</span><MonthPicker label="Период" value={period} disabled={dirty||saving} onChange={setPeriod}/></label><aside className="leader-deadline"><strong>Сроки отчёта</strong><span>Сдать до 10-го числа следующего месяца, 12:00 МСК. Редактирование открыто до конца следующего месяца.</span>{report?.submittedAt&&<span className="leader-submitted"><b>Отправлен</b>{new Date(report.submittedAt).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК</span>}</aside></div>
+  <div className="card leader-report-controls"><label><span>Кофейня</span><SelectControl label="Кофейня" value={shopId} disabled={dirty||saving} onChange={value=>setShopId(Number(value))} options={shops.map(s=>({value:s.id,label:s.name}))}/></label><label className="period-control"><span>Отчётный период</span><MonthPicker label="Период" value={period} disabled={dirty||saving} onChange={setPeriod}/></label><aside className="leader-deadline"><strong>{testEditing?'Тестовый режим':'Сроки отчёта'}</strong><span>{testEditing?'Редактирование прошлых месяцев открыто для проверки триггеров.':'Сдать до 10-го числа следующего месяца, 12:00 МСК. Редактирование открыто до конца следующего месяца.'}</span>{report?.submittedAt&&<span className="leader-submitted"><b>Отправлен</b>{new Date(report.submittedAt).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК</span>}</aside></div>
   {loading?<LoadingState variant="panel" label="Загружаем отчёт" />:!shops.length?<p>Нет доступных кофеен. Обратитесь к администратору для назначения.</p>:report&&<>
    <div className="report-section-toolbar"><div className="tabs">{blocks.map((label,index)=><button key={label} className={'tab'+(activeBlock===index?' active':'')} onClick={()=>setActiveBlock(index)}>{label}</button>)}</div><div className={'report-rating'+(report.score?.rating==null?'':report.score.rating>=80?' metric-zone-green':report.score.rating>=50?' metric-zone-yellow':' metric-zone-red')}><span>Рейтинг</span><strong>{dirty?'…':report.score?.rating??'—'}</strong><small>{dirty?'Пересчитываем после сохранения':'из 100 баллов'}</small></div></div>
    {activeBlock===1&&<section className="card labor-overview" aria-label="Выручка и напитки"><div className="labor-overview-header"><div><h2 className="card-title">Выручка и напитки</h2><p>Факт за выбранный период и план на следующий месяц.</p></div><div className="labor-previous"><span>Предыдущий факт</span><strong>{previous?.revenue??'—'} ₽</strong><strong>{previous?.drinksCount??'—'} напитков</strong></div></div><div className="labor-overview-grid"><label><span>Выручка, ₽</span>{input('Выручка',report.revenue,v=>change(r=>({...r,revenue:v})))}</label><label><span>План выручки</span>{input('План выручки',report.formData?.revenuePlan,v=>field('revenuePlan',v))}</label><label><span>Количество напитков</span>{input('Количество напитков',report.drinksCount,v=>change(r=>({...r,drinksCount:v})))}</label><label><span>План напитков</span>{input('План напитков',report.formData?.drinksPlan,v=>field('drinksPlan',v))}</label></div></section>}

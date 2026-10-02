@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessService, Actor } from '../common/access.service';
 import { reportPeriodState } from '../common/report-period';
@@ -13,17 +14,23 @@ const includeReport = {
 };
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService, private readonly access: AccessService) {}
+  constructor(private readonly prisma: PrismaService, private readonly access: AccessService, private readonly config: ConfigService) {}
+
+  getEditingPolicy() {
+    return { historicalEditingEnabled: this.config.get<string>('ALLOW_HISTORICAL_REPORT_EDITING') === 'true' };
+  }
 
   private decorate(report: any, metrics: any[]) {
     if (!report) return null;
     const state = reportPeriodState(report.year, report.month);
-    return { ...report, isLocked: report.isLocked || state.locked,
+    const isLocked = Boolean(report.isLocked || state.locked);
+    return { ...report, isLocked, isEditable: !isLocked || this.getEditingPolicy().historicalEditingEnabled,
       status: report.status === 'SUBMITTED' ? 'SUBMITTED' : state.overdue ? 'OVERDUE' : 'NOT_FILLED',
-      score: report.isLocked || state.locked ? report.ratingSnapshot : calculateScore(metrics, report) };
+      score: isLocked ? report.ratingSnapshot : calculateScore(metrics, report) };
   }
   private editable(report: any) {
-    if (report.isLocked || reportPeriodState(report.year, report.month).locked) throw new ForbiddenException('Исторический отчёт доступен только для чтения');
+    const state = reportPeriodState(report.year, report.month);
+    if ((report.isLocked || state.locked) && !this.getEditingPolicy().historicalEditingEnabled) throw new ForbiddenException('Исторический отчёт доступен только для чтения');
   }
   async getReports(coffeeShopId: number, year: number, month: number, user: Actor) {
     await this.access.requireShop(user, coffeeShopId);

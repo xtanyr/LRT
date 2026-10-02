@@ -8,7 +8,7 @@ describe('Report mutation rules', () => {
       metric: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const access = { requireShop: jest.fn().mockResolvedValue({ id: 1, isActive: true }), requireReport: jest.fn().mockResolvedValue(report) };
-    const service = new (ReportsService as any)(prisma, access);
+    const service = new (ReportsService as any)(prisma, access, { get: jest.fn().mockReturnValue('false') });
     return { service, prisma };
   }
   const actor = { id: 1, role: 'LEADER' };

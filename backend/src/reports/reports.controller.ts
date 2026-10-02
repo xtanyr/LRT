@@ -14,6 +14,13 @@ import { GetUser } from '../common/decorators/get-user.decorator';
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
+  @Get('editing-policy')
+  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get report editing policy for the current environment' })
+  getEditingPolicy() {
+    return this.reportsService.getEditingPolicy();
+  }
+
   @Get('my')
   @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get reports for current user' })

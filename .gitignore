@@ -1,14 +1,75 @@
+# Dependencies, builds and caches
 node_modules/
 dist/
+dist-ssr/
+*.tsbuildinfo
+.cache/
+.vite/
+.vite-temp/
+.eslintcache
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Test output and TypeScript files emitted beside backend tests
 coverage/
+.nyc_output/
+test-results/
+playwright-report/
+blob-report/
+/backend/test/**/*.spec.js
+/backend/test/**/*.spec.js.map
+/backend/test/**/*.spec.d.ts
+
+# Local environment; example configuration stays versioned
 .env
 .env.*
 !.env.example
+!.env.*.example
 .local/
+
+# Logs, temporary files and database backups
+logs/
 *.log
+*.tmp
+*.temp
+*.bak
+*~
+*.swp
+*.swo
+*.dump
+*.sql.gz
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+backups/
+/tmp/
+/temp/
+/tmp_inspect_workbooks.py
+/lrt-*.zip
+/lrt-*.zip.sha256
+
+# Generated design audit reports (premium-ui.json is configuration)
+premium-audit*.json
+
+# Machine-specific editor and agent settings
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.claude/settings.local.json
 .codex
 .kilo
 .superpowers
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.suo
+*.user
+
+# Existing local project references
 graphify-out
 xtany-identity
 roadmap documentation
