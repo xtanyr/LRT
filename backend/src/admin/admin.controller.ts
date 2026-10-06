@@ -30,7 +30,7 @@ export class AdminController {
   }
 
   @Get('config-logs')
-  @Roles(UserRole.ADMIN, UserRole.COO)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get config change logs' })
   getConfigChangeLogs() {
     return this.adminService.getConfigChangeLogs();

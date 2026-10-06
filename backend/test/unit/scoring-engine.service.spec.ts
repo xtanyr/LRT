@@ -82,6 +82,43 @@ describe('calculateScore', () => {
   });
 
   it.each([
+    ['GENERIC', 'HIGHER_IS_BETTER'],
+    ['GENERIC', 'LOWER_IS_BETTER'],
+    ['PERFORMANCE', 'HIGHER_IS_BETTER'],
+    ['LABOR_COST', 'LOWER_IS_BETTER'],
+    ['DESSERT_WRITEOFF', 'LOWER_IS_BETTER'],
+    ['PRODUCT_WRITEOFF', 'LOWER_IS_BETTER'],
+    ['FREE_ACCESS', 'LOWER_IS_BETTER'],
+    ['DEPOSIT', 'LOWER_IS_BETTER'],
+  ] as const)('leaves negative %s values unscored for %s', (code, direction) => {
+    const result = calculateScore([metric({ code, direction, pointsCritical: 2 })], report(-1));
+
+    expect(result).toMatchObject({ rating: 0, totalPoints: 0, maxPoints: 11.5 });
+    expect(result.results[0]).toMatchObject({ absoluteValue: -1, computedPercent: null, zone: null, pointsAwarded: null });
+  });
+
+  it('does not award points to a negative decimal value against negative configured thresholds', () => {
+    const result = calculateScore(
+      [metric({ thresholdStrong: -2, thresholdMedium: -3 })],
+      { ...report(null), metricValues: [{ metricId: 1, absoluteValue: { toString: () => '-1' } }] },
+    );
+
+    expect(result).toMatchObject({ rating: 0, maxPoints: 11.5 });
+    expect(result.results[0]).toMatchObject({ absoluteValue: -1, zone: null, pointsAwarded: null, thresholdStrong: -2, thresholdMedium: -3 });
+  });
+
+  it.each([
+    ['GENERIC', 'HIGHER_IS_BETTER', 'CRITICAL', 2, null],
+    ['GENERIC', 'LOWER_IS_BETTER', 'TARGET', 11.5, null],
+    ['LABOR_COST', 'LOWER_IS_BETTER', 'TARGET', 11.5, 0],
+  ] as const)('continues to score valid zero %s values for %s', (code, direction, zone, pointsAwarded, computedPercent) => {
+    const result = calculateScore([metric({ code, direction, pointsCritical: 2 })], report(0));
+
+    expect(result.rating).toBe(pointsAwarded);
+    expect(result.results[0]).toMatchObject({ absoluteValue: 0, computedPercent, zone, pointsAwarded });
+  });
+
+  it.each([
     [13_000, 11, 8.5],
     [12_999, 8.5, 7.5],
     [10_000, 8.5, 7.5],

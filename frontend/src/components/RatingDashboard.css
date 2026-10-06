@@ -34,6 +34,10 @@
   margin: 0 0 18px;
 }
 
+.dashboard-filters-with-status {
+  grid-template-columns: 150px minmax(140px, 220px) minmax(150px, 200px) minmax(160px, 1fr);
+}
+
 .dashboard-filters label {
   display: grid;
   gap: 5px;
@@ -52,8 +56,15 @@
   max-width: 360px;
 }
 
+@media (max-width: 1000px) {
+  .dashboard-filters-with-status {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 @media (max-width: 720px) {
-  .dashboard-filters {
+  .dashboard-filters,
+  .dashboard-filters-with-status {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -67,7 +78,8 @@
   .dashboard-view-switch { width: 100%; }
   .dashboard-view-switch a { min-width: 0; }
 
-  .dashboard-filters {
+  .dashboard-filters,
+  .dashboard-filters-with-status {
     grid-template-columns: 1fr;
   }
 

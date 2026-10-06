@@ -108,7 +108,7 @@ export function calculateScore(metrics: ScoringMetric[], report: ScoringReport):
     const absoluteValue = metricValue?.absoluteValue == null ? null : asNumber(metricValue.absoluteValue);
 
     let computedPercent: number | null = null;
-    let scoreValue = absoluteValue;
+    let scoreValue = absoluteValue != null && absoluteValue < 0 ? null : absoluteValue;
     let zone: MetricZone | null = null;
     let pointsAwarded: number | null = null;
 

@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessService, Actor } from '../common/access.service';
 import { reportPeriodState } from '../common/report-period';
-import { numberValue, positiveId } from '../common/validation';
+import { nonNegativeNumberValue, numberValue, positiveId } from '../common/validation';
 import { calculateScore } from '../scoring/rating-calculator';
 
 const includeReport = {
@@ -23,12 +23,14 @@ export class ReportsService {
   private decorate(report: any, metrics: any[]) {
     if (!report) return null;
     const state = reportPeriodState(report.year, report.month);
-    const isLocked = Boolean(report.isLocked || state.locked);
-    return { ...report, isLocked, isEditable: !isLocked || this.getEditingPolicy().historicalEditingEnabled,
+    const imported = report.ratingSnapshot?.source?.policy === 'preserve-source-score';
+    const isLocked = Boolean(imported || report.isLocked || state.locked);
+    return { ...report, isLocked, isEditable: !imported && (!isLocked || this.getEditingPolicy().historicalEditingEnabled),
       status: report.status === 'SUBMITTED' ? 'SUBMITTED' : state.overdue ? 'OVERDUE' : 'NOT_FILLED',
       score: isLocked ? report.ratingSnapshot : calculateScore(metrics, report) };
   }
   private editable(report: any) {
+    if (report.ratingSnapshot?.source?.policy === 'preserve-source-score') throw new ForbiddenException('Импортированный исторический отчёт доступен только для чтения: исходный рейтинг сохраняется.');
     const state = reportPeriodState(report.year, report.month);
     if ((report.isLocked || state.locked) && !this.getEditingPolicy().historicalEditingEnabled) throw new ForbiddenException('Исторический отчёт доступен только для чтения');
   }
@@ -61,8 +63,9 @@ export class ReportsService {
     const metrics = await this.prisma.metric.findMany({ where: { isActive: true } });
     const values = (data.metricValues || []).map((v: any) => {
       const metricId = positiveId(v?.metricId);
-      if (!metrics.some(m => m.id === metricId)) throw new BadRequestException('Неизвестная или архивная метрика');
-      return { metricId, absoluteValue: numberValue(v.absoluteValue, 'Метрика', true) };
+      const metric = metrics.find(m => m.id === metricId);
+      if (!metric) throw new BadRequestException('Неизвестная или архивная метрика');
+      return { metricId, absoluteValue: nonNegativeNumberValue(v.absoluteValue, metric.name, true) };
     });
     const questions = await this.prisma.analysisQuestion.findMany({ where: { isActive: true } });
     const analyses = (data.analyses || []).map((a: any) => {
@@ -76,7 +79,7 @@ export class ReportsService {
         if (value === '' || value === null) { formData[key] = null; continue; }
         try { const url = new URL(String(value)); if (!['http:', 'https:'].includes(url.protocol) || url.href.length > 2000) throw new Error(); formData[key] = url.href; }
         catch { throw new BadRequestException('Ссылка должна начинаться с https:// или http://'); }
-      } else formData[key] = numberValue(value, key, true);
+      } else formData[key] = nonNegativeNumberValue(value, 'Показатель отчёта', true);
     }
     return this.prisma.$transaction(async tx => {
       const before = await tx.monthlyReport.findUnique({ where, include: includeReport });
@@ -90,7 +93,12 @@ export class ReportsService {
       const snapshot = calculateScore(metrics, after);
       await tx.monthlyReport.update({ where: { id: saved.id }, data: { ratingSnapshot: snapshot as any } });
       for (const r of snapshot.results) await tx.metricValue.updateMany({ where: { reportId: saved.id, metricId: r.metricId }, data: { computedPercent: r.computedPercent, zone: r.zone, pointsAwarded: r.pointsAwarded } });
-      const changes: [string, unknown, unknown][] = [['revenue', before?.revenue?.toString(), String(revenue)], ['drinksCount', before?.drinksCount, drinksCount], ['formData', before?.formData, after.formData]];
+      const changes: [string, unknown, unknown][] = [['revenue', before?.revenue?.toString(), String(revenue)], ['drinksCount', before?.drinksCount, drinksCount]];
+      const previousFormData = before?.formData && typeof before.formData === 'object' && !Array.isArray(before.formData) ? before.formData : {};
+      const nextFormData = after.formData && typeof after.formData === 'object' && !Array.isArray(after.formData) ? after.formData : {};
+      for (const key of new Set([...Object.keys(previousFormData), ...Object.keys(nextFormData)])) {
+        changes.push([`formData:${key}`, previousFormData[key], nextFormData[key]]);
+      }
       for (const v of values) changes.push([`metric:${v.metricId}`, before?.metricValues.find(m => m.metricId === v.metricId)?.absoluteValue?.toString() ?? null, v.absoluteValue?.toString() ?? null]);
       for (const a of analyses) changes.push([`analysis:${a.questionKey}`, before?.analyses.find(x => x.questionKey === a.questionKey)?.content ?? '', a.content]);
       for (const [fieldChanged, oldValue, newValue] of changes) if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) await tx.reportEditLog.create({ data: { reportId: saved.id, editedById: user.id!, fieldChanged, oldValue: JSON.stringify(oldValue) ?? null, newValue: JSON.stringify(newValue) ?? null } });
@@ -114,9 +122,34 @@ export class ReportsService {
       if (Number(report.revenue) <= 0 || !report.drinksCount || metrics.some(m => !report.metricValues.some(v => v.metricId === m.id && v.absoluteValue !== null))) throw new BadRequestException('Заполните выручку, напитки и все метрики');
       const snapshot = calculateScore(metrics, report);
       if (snapshot.results.some(r => r.zone === null)) throw new BadRequestException('Не все метрики можно рассчитать');
-      const saved = await tx.monthlyReport.update({ where: { id }, data: { status: 'SUBMITTED', submittedAt: report.submittedAt || new Date(), submittedById: report.submittedById || user.id, ratingSnapshot: snapshot as any }, include: includeReport });
+      const submittedAt = new Date();
+      const saved = await tx.monthlyReport.update({ where: { id }, data: { status: 'SUBMITTED', submittedAt, submittedById: report.submittedById || user.id, ratingSnapshot: snapshot as any }, include: includeReport });
       if (report.status !== 'SUBMITTED') await tx.reportEditLog.create({ data: { reportId: id, editedById: user.id!, fieldChanged: 'status', oldValue: report.status, newValue: 'SUBMITTED' } });
+      if (report.submittedAt?.getTime() !== submittedAt.getTime()) await tx.reportEditLog.create({ data: { reportId: id, editedById: user.id!, fieldChanged: 'submittedAt', oldValue: report.submittedAt?.toISOString() ?? null, newValue: submittedAt.toISOString() } });
       return this.decorate(saved, metrics);
+    });
+  }
+  async getAllEditLogs(user: Actor) {
+    const logs = await this.prisma.reportEditLog.findMany({
+      where: { report: { coffeeShop: this.access.shopWhere(user) } },
+      include: {
+        editedBy: { select: { id: true, name: true } },
+        report: { select: {
+          id: true, year: true, month: true,
+          coffeeShop: { select: { id: true, name: true } },
+          metricValues: { select: { metricId: true, metric: { select: { name: true } } } },
+        } },
+      },
+      orderBy: [{ editedAt: 'desc' }, { id: 'desc' }],
+    });
+    const questionKeys = [...new Set(logs.filter(log => log.fieldChanged.startsWith('analysis:')).map(log => log.fieldChanged.slice('analysis:'.length)))];
+    const questions = questionKeys.length ? await this.prisma.analysisQuestion.findMany({
+      where: { questionKey: { in: questionKeys } }, select: { questionKey: true, label: true },
+    }) : [];
+    const labels = new Map(questions.map(question => [question.questionKey, question.label]));
+    return logs.map(log => {
+      const analysisLabel = log.fieldChanged.startsWith('analysis:') ? labels.get(log.fieldChanged.slice('analysis:'.length)) : undefined;
+      return analysisLabel ? { ...log, analysisLabel } : log;
     });
   }
   async getEditLogs(id: number, user: Actor) {

@@ -4,10 +4,12 @@ import { api } from '../services/api';
 export default function NotificationBanner() {
  const [items,setItems]=useState<{id:number;message:string;isRead:boolean;ipvStatusId?:number}[]>([]);
  useEffect(()=>{
-  let alive=true;
-  const refresh=()=>api.get('/notifications').then(r=>{if(alive)setItems(r.data.data||r.data||[]);}).catch(()=>{});
+  let alive=true,requestId=0;
+  const refresh=()=>{const id=++requestId;return api.get('/notifications').then(r=>{if(alive&&id===requestId)setItems(r.data.data||r.data||[]);}).catch(()=>{});};
   void refresh();const interval=window.setInterval(refresh,60000);
-  return()=>{alive=false;window.clearInterval(interval);};
+  window.addEventListener('ipv-updated',refresh);
+  window.addEventListener('focus',refresh);
+  return()=>{alive=false;window.clearInterval(interval);window.removeEventListener('ipv-updated',refresh);window.removeEventListener('focus',refresh);};
  },[]);
  const active=items.filter(i=>!i.isRead&&i.ipvStatusId);
  if(!active.length)return null;

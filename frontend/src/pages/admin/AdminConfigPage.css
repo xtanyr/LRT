@@ -1,0 +1,6 @@
+.trigger-config-list { display: grid; gap: 18px; }
+.trigger-config-rule { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.trigger-config-rule fieldset { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; border: 0; padding: 0; margin: 12px 0; }
+.trigger-config-rule .input { max-width: none; }
+.trigger-config-active { display: flex; align-items: center; gap: 8px; grid-column: 1 / -1; font-size: 12px; }
+.trigger-config-rule [role="alert"] { color: var(--danger); font-size: 12px; }

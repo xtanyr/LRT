@@ -4,12 +4,15 @@ import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   buildHistoricalPreview,
+  FORM_FIELD_MAPPINGS,
   HistoricalFormData,
   HistoricalMetricRow,
   HistoricalPeriodPreview,
   HistoricalImportPreview,
   ImportMetricReference,
+  ImportFormField,
 } from './import-layout';
+import { cleanNumericString } from './import.parser';
 
 interface HistoricalConfirmPayload {
   coffeeShopId: number;
@@ -31,6 +34,52 @@ function sanitizeFileName(value: unknown) {
   return value.split(/[\\/]/).pop()!.slice(0, 255);
 }
 
+const TEXT_FORM_KEYS = new Set<string>(FORM_FIELD_MAPPINGS
+  .map(([key]) => key)
+  .filter((key) => key.endsWith('Analysis') || key.endsWith('Url') || key === 'summary'));
+
+function negativeFormFields(formData: HistoricalFormData | null): ImportFormField[] {
+  return (formData?.fields ?? []).filter((field) => {
+    if (TEXT_FORM_KEYS.has(field.key)) return false;
+    const value = typeof field.value === 'number'
+      ? field.value
+      : typeof field.value === 'string'
+        ? cleanNumericString(field.value).value
+        : null;
+    return value != null && value < 0;
+  });
+}
+
+function annotateNegativeValues(preview: HistoricalImportPreview): HistoricalImportPreview {
+  for (const period of preview.periods) {
+    for (const row of period.rows) {
+      for (const [field, value] of [['absoluteValue', row.absoluteValue], ['computedPercent', row.computedPercent], ['sourcePoints', row.sourcePoints]] as const) {
+        if (value == null || value >= 0) continue;
+        const message = `${row.code}.${field} должно быть не меньше нуля`;
+        row.issue = row.issue ? `${row.issue}; ${message}` : message;
+        period.issues.push({
+          severity: 'error',
+          field,
+          code: row.code,
+          message,
+          cell: field === 'sourcePoints' ? row.sourcePointsCell : row.sourceValueCell,
+        });
+        period.selected = false;
+      }
+    }
+    for (const field of negativeFormFields(period.formData)) {
+      period.issues.push({
+        severity: 'error',
+        field: field.key === 'revenue' ? 'revenue' : `formData:${field.key}`,
+        message: `${field.label} должно быть не меньше нуля`,
+        cell: field.sourceCell,
+      });
+      period.selected = false;
+    }
+  }
+  return preview;
+}
+
 function validateRow(row: HistoricalMetricRow, periodLabel: string) {
   if (!Number.isInteger(row.metricId) || Number(row.metricId) <= 0 || !row.code || !row.metricName) {
     throw new BadRequestException(`${periodLabel}: каждая строка должна быть сопоставлена с метрикой`);
@@ -38,6 +87,9 @@ function validateRow(row: HistoricalMetricRow, periodLabel: string) {
   for (const [field, value] of [['absoluteValue', row.absoluteValue], ['computedPercent', row.computedPercent], ['sourcePoints', row.sourcePoints]] as const) {
     if (value != null && !isFiniteNumber(value)) {
       throw new BadRequestException(`${periodLabel}: ${row.code}.${field} должно быть числом или пустым значением`);
+    }
+    if (value != null && value < 0) {
+      throw new BadRequestException(`${periodLabel}: ${row.code}.${field} должно быть не меньше нуля`);
     }
   }
   if (!isCellReference(row.sourceValueCell) || !isCellReference(row.sourcePointsCell)) {
@@ -76,6 +128,10 @@ function validatePeriod(period: HistoricalPeriodPreview) {
   }
   if (!Array.isArray(period.rows) || period.rows.length === 0) {
     throw new BadRequestException(`${label}: нет строк метрик`);
+  }
+  for (const field of negativeFormFields(period.formData)) {
+    if (field.key === 'revenue') continue;
+    throw new BadRequestException(`${label}: ${field.label} должно быть не меньше нуля`);
   }
   if (period.issues?.some((issue) => issue.severity === 'error' && !(issue.field === 'revenue' && isFiniteNumber(period.revenue)))) {
     throw new BadRequestException(`${label}: в периоде остались неисправленные ошибки`);
@@ -134,7 +190,9 @@ function buildRatingSnapshot(period: HistoricalPeriodPreview, sourceFile: string
 function buildFormData(period: HistoricalPeriodPreview, sourceFile: string): HistoricalFormData & { importSource: object } {
   return {
     sourceSheet: period.formData?.sourceSheet ?? period.sourceSheet,
-    fields: period.formData?.fields ?? [],
+    fields: (period.formData?.fields ?? []).map((field) => field.key === 'revenue'
+      ? { ...field, value: period.revenue }
+      : field),
     importSource: {
       kind: 'legacy-xlsx',
       fileName: sourceFile,
@@ -167,7 +225,7 @@ export class ImportService {
       select: { id: true, code: true, name: true, unit: true },
     }) as ImportMetricReference[];
     try {
-      return buildHistoricalPreview(workbook, metrics, sanitizeFileName(file.originalname));
+      return annotateNegativeValues(buildHistoricalPreview(workbook, metrics, sanitizeFileName(file.originalname)));
     } catch (error) {
       throw new BadRequestException(error instanceof Error ? error.message : 'Неизвестный формат исторического файла');
     }

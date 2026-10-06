@@ -2,6 +2,7 @@ import { useRatingColors } from '../../services/rating-colors';
 import { computeReportScore, metricZone, type ScoredReport } from '../../services/report-score';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { api } from '../../services/api';
 import LoadingState from '../../components/LoadingState';
 import '../../styles/pages.css';
@@ -29,9 +30,15 @@ interface Report extends ScoredReport {
 
 interface IPVStatus {
   id: number;
+  coffeeShopId: number;
   status: string;
   rule: string;
   severity: string;
+  triggeredAt: string;
+  metricId: number | null;
+  metricName: string | null;
+  daysOverdue: number;
+  closeReason?: string | null;
 }
 
 interface Comment {
@@ -54,18 +61,23 @@ export default function CityShopPage() {
   const [ipvStatuses, setIpvStatuses] = useState<IPVStatus[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [ipvError, setIpvError] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
+    let active=true;
     const load = async () => {
       if (!shopId) return;
+      setLoading(true);setShop(null);setIpvError('');setLoadError('');
       try {
         const [shopRes, metricsRes, reportsRes, ipvRes, commentsRes] = await Promise.all([
           api.get(`/coffee-shops/${shopId}`),
           api.get('/metrics'),
           api.get(`/reports/coffee-shop/${shopId}/${new Date().getFullYear()}/${new Date().getMonth() + 1}`).catch(() => ({ data: null })),
-          api.get(`/ipv-triggers/statuses?coffeeShopId=${shopId}`).catch(() => ({ data: { data: [] } })),
+          api.get(`/ipv-triggers/statuses?coffeeShopId=${shopId}`).catch(() => {if(active)setIpvError('Не удалось загрузить триггеры. Обновите страницу.');return { data: [] };}),
           api.get(`/comments/coffee-shop/${shopId}`).catch(() => ({ data: { data: [] } })),
         ]);
+        if(!active)return;
         const shopData = shopRes.data.data || shopRes.data;
         setShop({
           id: shopData.id,
@@ -82,20 +94,22 @@ export default function CityShopPage() {
         } else {
           setReports([]);
         }
-        setIpvStatuses(ipvRes.data.data || ipvRes.data || []);
+        setIpvStatuses((ipvRes.data.data || ipvRes.data || []).filter((item:IPVStatus)=>item.coffeeShopId===Number(shopId)));
         setComments(commentsRes.data.data || commentsRes.data || []);
-      } finally {
-        setLoading(false);
+      } catch {if(active)setLoadError('Не удалось загрузить кофейню. Обновите страницу.');}
+      finally {
+        if(active)setLoading(false);
       }
     };
     load();
+    return()=>{active=false;};
   }, [shopId]);
 
   const currentReport = reports[0];
   const score = currentReport ? computeReportScore(currentReport, metrics) : null;
 
   if (loading) return <LoadingState />;
-  if (!shop) return <div className="page">Кофейня не найдена</div>;
+  if (!shop) return <div className="page">{loadError?<p role="alert">{loadError}</p>:'Кофейня не найдена'}</div>;
 
   const cityName = shop.city?.name || '—';
 
@@ -202,7 +216,7 @@ export default function CityShopPage() {
                         {r.status === 'SUBMITTED' ? 'сдан' : 'черновик'}
                       </span>
                     </td>
-                    <td className="muted">{r.submittedAt ? new Date(r.submittedAt).toLocaleString('ru-RU') : '—'}</td>
+                    <td className="muted">{r.submittedAt ? new Date(r.submittedAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }) + ' МСК' : '—'}</td>
                   </tr>
                 );
               })}
@@ -214,12 +228,14 @@ export default function CityShopPage() {
 
       <div className="card">
         <div className="card-title">Триггеры ИПВ</div>
-        {ipvStatuses.length > 0 ? (
+        <Link to="/triggers">Открыть мониторинг ИПВ</Link>
+        {ipvError?<p role="alert">{ipvError}</p>:ipvStatuses.length > 0 ? (
           <div className="table-wrap">
             <table className="table">
               <thead>
                 <tr>
                   <th>Правило</th>
+                  <th>Выявлен</th>
                   <th>Критичность</th>
                   <th>Статус</th>
                 </tr>
@@ -227,11 +243,12 @@ export default function CityShopPage() {
               <tbody>
                 {ipvStatuses.map((ipv) => (
                   <tr key={ipv.id}>
-                    <td>{ipv.rule}</td>
+                    <td>{ipv.rule}{ipv.rule==='T3'&&<div className="helper-text">{ipv.metricName||`Метрика #${ipv.metricId??'—'}`}</div>}{ipv.closeReason&&<div className="helper-text">Итог: {ipv.closeReason}</div>}</td>
+                    <td>{ipv.triggeredAt?new Date(ipv.triggeredAt).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})+' МСК':'—'}</td>
                     <td>
-                      <span className={`chip ${ipv.severity === 'CRITICAL' ? 'chip-danger' : 'chip-warning'}`}>{ipv.severity}</span>
+                      <span className={`chip ${ipv.severity?.toLowerCase() === 'critical' ? 'chip-danger' : 'chip-warning'}`}>Требует внимания</span>
                     </td>
-                    <td><span className="chip chip-ghost">{ipv.status}</span></td>
+                    <td><span className="chip chip-ghost">{ipv.status==='NOT_STARTED'?'🔔 Не начат':ipv.status==='IN_PROGRESS'?'⏳ В работе':'Завершён'}</span>{ipv.daysOverdue>0&&<div className="helper-text">🔴 Просрочен на {ipv.daysOverdue} дн.</div>}</td>
                   </tr>
                 ))}
               </tbody>

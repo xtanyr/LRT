@@ -34,15 +34,23 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
+      if (response.status === 401) {
+        throw new Error('Неверная почта или пароль. Проверьте данные и попробуйте ещё раз.');
+      }
+      if (response.status === 429) {
+        throw new Error('Слишком много попыток входа. Попробуйте чуть позже.');
+      }
       if (!response.ok) {
-        throw new Error(await readError(response, 'Неверный email или пароль'));
+        throw new Error('Не удалось войти. Попробуйте ещё раз позже.');
       }
       const data = await response.json();
       const session = data.data || data;
       login(session.accessToken, session.user);
       navigate('/');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Не удалось войти');
+      setError(caught instanceof TypeError
+        ? 'Не удалось связаться с сервером. Проверьте подключение к интернету и попробуйте ещё раз.'
+        : caught instanceof Error ? caught.message : 'Не удалось войти. Попробуйте ещё раз позже.');
     } finally {
       setLoading(false);
     }
@@ -157,7 +165,7 @@ export default function LoginPage() {
               <span className="field-label">Пароль</span>
               <input className="input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
             </label>
-            {error && <div className="error">{error}</div>}
+            {error && <div className="error" role="alert">{error}</div>}
             <button className="btn btn-primary btn-wide" type="submit" disabled={loading}>
               {loading ? 'Вход...' : 'Войти'}
             </button>

@@ -9,6 +9,11 @@ export function numberValue(raw: unknown, label: string, nullable = false): numb
   if (parsed.value === null || parsed.problem || Math.abs(parsed.value) > 9999999999.99 || Math.abs(parsed.value * 100 - Math.round(parsed.value * 100)) > 0.00001) throw new BadRequestException(`Некорректное число в поле «${label}»; допустимо до двух знаков после запятой`);
   return parsed.value;
 }
+export function nonNegativeNumberValue(raw: unknown, label: string, nullable = false): number | null {
+  const value = numberValue(raw, label, nullable);
+  if (value !== null && value < 0) throw new BadRequestException(`Значение в поле «${label}» не может быть отрицательным. Укажите 0 или положительное число.`);
+  return value;
+}
 export function positiveId(raw: unknown): number {
   const id = Number(raw);
   if (!Number.isSafeInteger(id) || id < 1) throw new BadRequestException('Некорректный идентификатор');

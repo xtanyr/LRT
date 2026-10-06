@@ -50,6 +50,10 @@
   align-items: center;
 }
 
+.leader-report-example {
+  margin-top: 6px;
+}
+
 .leader-report-meta {
   min-height: 26px;
   display: flex;
@@ -188,6 +192,26 @@
 
 .leader-report .table td {
   vertical-align: top;
+}
+
+.report-metric-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.report-gifts-link {
+  display: grid;
+  gap: 4px;
+  max-width: 300px;
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+.report-gifts-link label {
+  display: grid;
+  gap: 4px;
+  color: var(--ink-2);
 }
 
 .leader-report .table td .input {

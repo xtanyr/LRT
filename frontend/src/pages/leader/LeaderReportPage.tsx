@@ -4,6 +4,7 @@ import { api } from '../../services/api';
 import { useToast } from '../../components/ToastProvider';
 import { MonthPicker, SelectControl } from '../../components/SelectControl';
 import LoadingState from '../../components/LoadingState';
+import HelpTooltip from '../../components/HelpTooltip';
 import '../../styles/pages.css';
 import './LeaderReportPage.css';
 
@@ -37,6 +38,11 @@ const extras = [
   {key:'rent',label:'Аренда, ₽',block:3,hint:'Аренда, коммунальные услуги, вывоз ТКО, охрана',share:true},
   {key:'equipment',label:'Оборудование, материалы, ремонт, ₽',block:3,hint:'Ремонт помещений, эксплуатационные расходы, инвентарь, ремонт и замена оборудования',share:true},
 ];
+const reportHelpTitles:Record<string,string>={
+ gifts:'Подарки',DESSERT_WRITEOFF:'Списание десертов',PRODUCT_WRITEOFF:'Списание продуктов',
+ rent:'Аренда',equipment:'Оборудование, материалы, ремонт',personnelCosts:'Расходы на персонал',adminCosts:'Административные затраты',
+};
+const articleHelp=(key:string)=>reportHelpTitles[key]&&<HelpTooltip label={reportHelpTitles[key]}>Текст подсказки и ссылка на статью будут добавлены позже.</HelpTooltip>;
 const unwrap = (r: {data:any}) => r.data?.data !== undefined ? r.data.data : r.data;
 const message = (e:any) => { const m=e.response?.data?.message; return Array.isArray(m)?m.join(', '):m||'Не удалось сохранить данные. Попробуйте ещё раз.'; };
 const prevPeriod = (year:number,month:number) => month===1?{year:year-1,month:12}:{year,month:month-1};
@@ -44,6 +50,20 @@ const emptyReport = (coffeeShopId:number,year:number,month:number):Report => ({c
 const normalizeReport = (raw:unknown, fallback:Report):Report => {
  const report = raw && typeof raw === 'object' ? raw as Partial<Report> : {};
  return {...fallback,...report,metricValues:Array.isArray(report.metricValues)?report.metricValues:[],analyses:Array.isArray(report.analyses)?report.analyses:[],formData:report.formData&&typeof report.formData==='object'?report.formData:{}};
+};
+const httpUrl=(value:unknown):string|undefined=>{
+ try { const url=new URL(String(value??''));return ['http:','https:'].includes(url.protocol)?url.href:undefined; }
+ catch { return undefined; }
+};
+const negativeValueMessage = (report:Report,metrics:Metric[]):string => {
+ const labels:Record<string,string>={revenuePlan:'План выручки',drinksPlan:'План напитков'};
+ metrics.forEach(metric=>{labels['metricPlan_'+metric.id]='План: '+metric.name;});
+ extras.forEach(extra=>{labels[extra.key]=extra.label;labels[extra.key+'Plan']='План: '+extra.label;});
+ const fields:[string,unknown][]=[['Выручка',report.revenue],['Количество напитков',report.drinksCount],
+  ...report.metricValues.map((value):[string,unknown]=>[metrics.find(metric=>metric.id===value.metricId)?.name||'Показатель',value.absoluteValue]),
+  ...Object.entries(report.formData||{}).filter(([key])=>!['giftsLink','equipmentLink'].includes(key)).map(([key,value]):[string,unknown]=>[labels[key]||key,value])];
+ const negative=fields.find(([,value])=>typeof value==='number'?value<0:typeof value==='string'&&Number(value.replace(/\s/g,'').replace(/[₽$€£]$/,'').replace(',','.'))<0);
+ return negative?negative[0]+': значение не может быть отрицательным.':'';
 };
 
 export default function LeaderReportPage() {
@@ -83,8 +103,13 @@ export default function LeaderReportPage() {
  const change=(fn:(r:Report)=>Report)=>{if(!locked&&!saving){setReport(r=>r?fn(r):r);setDirty(true);setAutosaveState('waiting');}};
  const field=(key:string,value:string)=>change(r=>({...r,formData:{...r.formData,[key]:value}}));
  const value=(r:Report|null,id:number)=>r?.metricValues.find(v=>v.metricId===id)?.absoluteValue??'';
+ const negativeError=report?negativeValueMessage(report,metrics):'';
+ const visibleError=negativeError||error;
+ const giftsLinkHref=httpUrl(report?.formData?.giftsLink);
  const save=async(submit:boolean,automatic=false)=>{
-  if(!report||locked||saving)return;setSaving(true);setError('');if(automatic)setAutosaveState('saving');
+  if(!report||locked||saving)return;
+  if(negativeValueMessage(report,metrics)){setAutosaveState('error');return;}
+  setSaving(true);setError('');if(automatic)setAutosaveState('saving');
   try {
    const saved=unwrap(await api.post('/reports/draft',{coffeeShopId:shopId,year,month,revenue:report.revenue||0,drinksCount:report.drinksCount||0,metricValues:report.metricValues,analyses:report.analyses,formData:report.formData||{}}));
    setReport(normalizeReport(saved,emptyReport(shopId,year,month)));setDirty(false);setAutosaveState('idle');
@@ -99,22 +124,22 @@ export default function LeaderReportPage() {
  };
  const input=(label:string,v:unknown,update:(s:string)=>void,className='')=><input className={'input'+className} aria-label={label} inputMode="decimal" value={String(v??'')} disabled={locked||saving} onChange={e=>update(e.target.value)}/>;
  const reportState=locked?'Исторический · только чтение':testEditing?'Исторический · тестовое редактирование':report?.status==='SUBMITTED'?'Заполнено':overdue?'Просрочено':'Не заполнено';
- const saveStatus=error?error:autosaveState==='saving'?'Сохраняем изменения…':autosaveState==='waiting'?'Сохранение через 2 секунды':locked?'Редактирование закрыто':'Автосохранение включено';
+ const saveStatus=visibleError?visibleError:autosaveState==='saving'?'Сохраняем изменения…':autosaveState==='waiting'?'Сохранение через 2 секунды':locked?'Редактирование закрыто':'Автосохранение включено';
  const activeAnalysisGroups=analysisSections.map(group=>({...group,questions:questions.filter(question=>question.section===group.section).sort((a,b)=>a.displayOrder-b.displayOrder)})).filter(group=>group.questions.length>0&&blockFor(group.section)===activeBlock);
  const activeQuestions=activeAnalysisGroups.flatMap(group=>group.questions);
  const answeredQuestions=activeQuestions.filter(question=>report?.analyses.some(answer=>answer.questionKey===question.questionKey&&answer.content.trim().length>=3)).length;
  return <div className="page leader-report">
-      <div className="page-header leader-report-header"><div><h1 className="page-title">Отчёт за {period}</h1><div className="leader-report-meta"><span className="badge">{reportState}</span><span className={'leader-save-status '+(error?'is-error':autosaveState)} role={error?'alert':'status'} aria-live="polite">{saveStatus}</span></div></div><div className="page-actions"><button className="btn btn-primary" disabled={!report||locked||saving} onClick={()=>save(true)}>Отправить отчёт</button></div></div>
+      <div className="page-header leader-report-header"><div><h1 className="page-title">Отчёт за {period}</h1><div className="leader-report-example"><HelpTooltip label="Пример заполнения отчёта" triggerText="Пример заполнения отчёта">Пример скоро появится. Ссылка на заполненный отчёт будет добавлена позже.</HelpTooltip></div><div className="leader-report-meta"><span className="badge">{reportState}</span><span className={'leader-save-status '+(visibleError?'is-error':autosaveState)} role={visibleError?'alert':'status'} aria-live="polite">{saveStatus}</span></div></div><div className="page-actions"><button className="btn btn-primary" disabled={!report||locked||saving} onClick={()=>save(true)}>Отправить отчёт</button></div></div>
   <div className="card leader-report-controls"><label><span>Кофейня</span><SelectControl label="Кофейня" value={shopId} disabled={dirty||saving} onChange={value=>setShopId(Number(value))} options={shops.map(s=>({value:s.id,label:s.name}))}/></label><label className="period-control"><span>Отчётный период</span><MonthPicker label="Период" value={period} disabled={dirty||saving} onChange={setPeriod}/></label><aside className="leader-deadline"><strong>{testEditing?'Тестовый режим':'Сроки отчёта'}</strong><span>{testEditing?'Редактирование прошлых месяцев открыто для проверки триггеров.':'Сдать до 10-го числа следующего месяца, 12:00 МСК. Редактирование открыто до конца следующего месяца.'}</span>{report?.submittedAt&&<span className="leader-submitted"><b>Отправлен</b>{new Date(report.submittedAt).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК</span>}</aside></div>
   {loading?<LoadingState variant="panel" label="Загружаем отчёт" />:!shops.length?<p>Нет доступных кофеен. Обратитесь к администратору для назначения.</p>:report&&<>
-   <div className="report-section-toolbar"><div className="tabs">{blocks.map((label,index)=><button key={label} className={'tab'+(activeBlock===index?' active':'')} onClick={()=>setActiveBlock(index)}>{label}</button>)}</div><div className={'report-rating'+(report.score?.rating==null?'':report.score.rating>=80?' metric-zone-green':report.score.rating>=50?' metric-zone-yellow':' metric-zone-red')}><span>Рейтинг</span><strong>{dirty?'…':report.score?.rating??'—'}</strong><small>{dirty?'Пересчитываем после сохранения':'из 100 баллов'}</small></div></div>
+   <div className="report-section-toolbar"><div className="tabs">{blocks.map((label,index)=><button key={label} className={'tab'+(activeBlock===index?' active':'')} onClick={()=>setActiveBlock(index)}>{label}</button>)}</div><div className={'report-rating'+(report.score?.rating==null?'':report.score.rating>=80?' metric-zone-green':report.score.rating>=50?' metric-zone-yellow':' metric-zone-red')}><span>Рейтинг</span><strong>{dirty&&!negativeError?'…':report.score?.rating??'—'}</strong><small>{negativeError?'Последний сохранённый рейтинг':dirty?'Пересчитываем после сохранения':'из 100 баллов'}</small></div></div>
    {activeBlock===1&&<section className="card labor-overview" aria-label="Выручка и напитки"><div className="labor-overview-header"><div><h2 className="card-title">Выручка и напитки</h2><p>Факт за выбранный период и план на следующий месяц.</p></div><div className="labor-previous"><span>Предыдущий факт</span><strong>{previous?.revenue??'—'} ₽</strong><strong>{previous?.drinksCount??'—'} напитков</strong></div></div><div className="labor-overview-grid"><label><span>Выручка, ₽</span>{input('Выручка',report.revenue,v=>change(r=>({...r,revenue:v})))}</label><label><span>План выручки</span>{input('План выручки',report.formData?.revenuePlan,v=>field('revenuePlan',v))}</label><label><span>Количество напитков</span>{input('Количество напитков',report.drinksCount,v=>change(r=>({...r,drinksCount:v})))}</label><label><span>План напитков</span>{input('План напитков',report.formData?.drinksPlan,v=>field('drinksPlan',v))}</label></div></section>}
    {activeBlock!==4&&<div className="card table-wrap"><table className="table"><thead><tr><th>Показатель</th><th>Предыдущий факт</th><th>Текущий факт</th><th>План следующего месяца</th></tr></thead><tbody>
     {metrics.filter(m=>(['FREE_ACCESS','DEPOSIT'].includes(m.code)?0:blockFor(m.section||m.code))===activeBlock).sort((a,b)=>a.displayOrder-b.displayOrder).map(m=>{
      const share=['LABOR_COST','FREE_ACCESS','DEPOSIT','DESSERT_WRITEOFF','PRODUCT_WRITEOFF'].includes(m.code);
-     return <tr key={m.id}><td>{m.name}<div className="helper-text">{share?'Сумма, ₽; доля от выручки автоматически':m.unit}</div></td><td>{value(previous,m.id)===''?'—':value(previous,m.id)}</td><td>{input(m.name,value(report,m.id),v=>change(r=>({...r,metricValues:[...r.metricValues.filter(x=>x.metricId!==m.id),{metricId:m.id,absoluteValue:v}]})),metricClass(m.id))}</td><td>{input('План: '+m.name,report.formData?.['metricPlan_'+m.id],v=>field('metricPlan_'+m.id,v))}</td></tr>;
+     return <tr key={m.id}><td><span className="report-metric-label">{m.name}{articleHelp(m.code)}</span><div className="helper-text">{share?'Сумма, ₽; доля от выручки автоматически':m.unit}</div></td><td>{value(previous,m.id)===''?'—':value(previous,m.id)}</td><td>{input(m.name,value(report,m.id),v=>change(r=>({...r,metricValues:[...r.metricValues.filter(x=>x.metricId!==m.id),{metricId:m.id,absoluteValue:v}]})),metricClass(m.id))}</td><td>{input('План: '+m.name,report.formData?.['metricPlan_'+m.id],v=>field('metricPlan_'+m.id,v))}</td></tr>;
     })}
-   {extras.filter(f=>f.block===activeBlock).map(f=><tr key={f.key}><td>{f.label}<div className="helper-text">{f.hint}</div></td><td>{previous?.formData?.[f.key]??'—'}</td><td>{input(f.label,report.formData?.[f.key],v=>field(f.key,v))}</td><td>{input('План: '+f.label,report.formData?.[f.key+'Plan'],v=>field(f.key+'Plan',v))}</td></tr>)}
+   {extras.filter(f=>f.block===activeBlock).map(f=><tr key={f.key}><td><span className="report-metric-label">{f.label}{articleHelp(f.key)}</span><div className="helper-text">{f.hint}</div>{f.key==='gifts'&&<div className="report-gifts-link"><label><span>Ссылка на подарки</span><input className="input" type="url" inputMode="url" placeholder="https://…" maxLength={2000} value={report.formData?.giftsLink??''} disabled={locked||saving} onChange={e=>field('giftsLink',e.target.value)}/></label>{giftsLinkHref&&<a href={giftsLinkHref} target="_blank" rel="noopener noreferrer">Открыть ссылку</a>}</div>}</td><td>{previous?.formData?.[f.key]??'—'}</td><td>{input(f.label,report.formData?.[f.key],v=>field(f.key,v))}</td><td>{input('План: '+f.label,report.formData?.[f.key+'Plan'],v=>field(f.key+'Plan',v))}</td></tr>)}
    </tbody></table></div>}
    {activeBlock===3&&<div className="card"><label>План затрат на оборудование<input className="input" type="url" value={report.formData?.equipmentLink??''} disabled={locked||saving} onChange={e=>field('equipmentLink',e.target.value)}/>{/^https?:\/\//i.test(report.formData?.equipmentLink||'')&&<a href={report.formData?.equipmentLink} target="_blank" rel="noreferrer">Открыть таблицу</a>}</label></div>}
    <section className="card analysis-card" aria-labelledby="analysis-title"><div className="analysis-card-header"><div><h2 id="analysis-title" className="card-title">Анализ показателей</h2><p>Структура соответствует шаблону отчёта: у каждого показателя свой анализ. Откройте нужный раздел и заполните только относящиеся к нему пункты.</p></div><span className="badge">{answeredQuestions} из {activeQuestions.length} ответов</span></div>{activeAnalysisGroups.length===0?<p className="empty">Для этого раздела пока нет вопросов для анализа.</p>:<div className="analysis-groups">{activeAnalysisGroups.map(group=>{const expanded=expandedAnalysisSection===group.section;const answered=group.questions.filter(question=>report.analyses.some(answer=>answer.questionKey===question.questionKey&&answer.content.trim().length>=3)).length;return <article className="analysis-group" key={group.section}><button type="button" className="analysis-group-toggle" aria-expanded={expanded} onClick={()=>setExpandedAnalysisSection(expanded?null:group.section)}><span><strong>{group.title}</strong><small>{group.hint}</small></span><span className="analysis-group-count">{answered}/{group.questions.length} {expanded?'⌃':'⌄'}</span></button>{expanded&&<div className="analysis-list">{group.questions.map(question=>{const text=report.analyses.find(answer=>answer.questionKey===question.questionKey)?.content||'';const filled=text.trim().length>=3;return <label className="field analysis-question" key={question.questionKey}><span>{question.label}<span className={filled?'analysis-answer-state filled':'analysis-answer-state'}>{filled?'Заполнено':'Необязательно'}</span></span><textarea className="textarea resize-none" maxLength={20000} placeholder="Например: что произошло, почему и что сделаете в следующем месяце" value={text} disabled={locked||saving} onChange={e=>{const content=e.target.value;change(r=>({...r,analyses:[...r.analyses.filter(answer=>answer.questionKey!==question.questionKey),{questionKey:question.questionKey,content}]}));}}/></label>;})}</div>}</article>;})}</div>}</section>

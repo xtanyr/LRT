@@ -39,6 +39,13 @@ export class ReportsController {
     return this.reportsService.getReports(parseInt(coffeeShopId), parseInt(year), parseInt(month), user);
   }
 
+  @Get('edit-logs')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get edit history for accessible reports' })
+  getAllEditLogs(@GetUser() user: any) {
+    return this.reportsService.getAllEditLogs(user);
+  }
+
   @Get(':id')
   @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get report by ID' })
@@ -84,7 +91,7 @@ export class ReportsController {
   }
 
   @Get(':id/edit-logs')
-  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get edit logs for report' })
   getEditLogs(@Param('id') id: string, @GetUser() user: any) {
     return this.reportsService.getEditLogs(parseInt(id), user);

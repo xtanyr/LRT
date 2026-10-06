@@ -32,6 +32,6 @@ async function request(path, token, method='GET', body) {
  assert.equal(edited.status,200,JSON.stringify(edited.data));assert.equal(edited.data.status,'SUBMITTED');
  const dashboard=await request('/dashboard/leader',token);assert.equal(dashboard.status,200);assert.ok(dashboard.data.reports.some(r=>r.id===id&&r.score.rating===100));
  assert.equal((await request('/reports/draft',token,'POST',{...period,year:2020,month:1,revenue:100})).status,403);
- const logs=await request('/reports/'+id+'/edit-logs',token);assert.equal(logs.status,200);assert.ok(logs.data.length>0);
- console.log('Acceptance passed: login, scope, strict numbers, 100-point draft, optional analysis, submit, post-submit edit, dashboard, history lock, audit.');
+ for(const path of ['/reports/'+id+'/edit-logs','/reports/edit-logs','/admin/config-logs']) assert.equal((await request(path,token)).status,403);
+ console.log('Acceptance passed: login, scope, strict numbers, 100-point draft, optional analysis, submit, post-submit edit, dashboard, history lock, admin-only audit access.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

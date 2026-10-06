@@ -1,13 +1,29 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { isPendingTriggerSuppressed, triggerLeaderInclude } from '../ipv-triggers/trigger-visibility';
 
 @Injectable()
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async visibleWhere(userId: number) {
+    const linked = await this.prisma.notification.findMany({
+      where: { userId, ipvStatusId: { not: null } }, select: { ipvStatusId: true }, distinct: ['ipvStatusId'],
+    });
+    const ids = linked.flatMap(n => n.ipvStatusId === null ? [] : [n.ipvStatusId]);
+    if (!ids.length) return { userId };
+    const pending = await this.prisma.iPVStatus.findMany({
+      where: { id: { in: ids }, status: 'NOT_STARTED' }, include: { coffeeShop: { include: triggerLeaderInclude } },
+    });
+    const now = new Date();
+    const configs = pending.length ? await this.prisma.triggerConfig.findMany() : [];
+    const hidden = pending.filter(s => isPendingTriggerSuppressed(s.coffeeShop, now, configs.find(c => c.code === s.triggerCode))).map(s => s.id);
+    return hidden.length ? { userId, OR: [{ ipvStatusId: null }, { ipvStatusId: { notIn: hidden } }] } : { userId };
+  }
+
   async getNotifications(userId: number) {
     return this.prisma.notification.findMany({
-      where: { userId },
+      where: await this.visibleWhere(userId),
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
@@ -15,7 +31,7 @@ export class NotificationsService {
 
   async getUnreadCount(userId: number) {
     return this.prisma.notification.count({
-      where: { userId, isRead: false },
+      where: { ...await this.visibleWhere(userId), isRead: false },
     });
   }
 

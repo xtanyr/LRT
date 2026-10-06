@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Body, Patch, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Post, Body, Patch, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { IpvTriggersService } from './ipv-triggers.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -31,8 +31,22 @@ export class IpvTriggersController {
   @Get('statuses')
   @Roles(UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get IPV statuses' })
-  getStatuses(@GetUser() user: any) {
-    return this.ipvTriggersService.getIpvStatuses(user);
+  getStatuses(@GetUser() user: any, @Query('coffeeShopId') coffeeShopId?: string) {
+    return this.ipvTriggersService.getIpvStatuses(user, coffeeShopId);
+  }
+
+  @Get('diagnostics')
+  @Roles(UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Explain current trigger evaluation' })
+  getDiagnostics(@GetUser() user: any, @Query('coffeeShopId') coffeeShopId?: string) {
+    return this.ipvTriggersService.getDiagnostics(user, coffeeShopId);
+  }
+
+  @Post('evaluate')
+  @Roles(UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Evaluate triggers in accessible shops now' })
+  evaluate(@GetUser() user: any, @Query('coffeeShopId') coffeeShopId?: string) {
+    return this.ipvTriggersService.evaluateNow(user, coffeeShopId);
   }
 
   @Patch('status/:id')

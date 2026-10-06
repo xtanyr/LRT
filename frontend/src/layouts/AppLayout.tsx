@@ -54,7 +54,6 @@ const COO_MENU_GROUPS = [
       { label: 'Структура', to: '/structure' },
       { label: 'Пользователи', to: '/users' },
       { label: 'Конфигурация', to: '/config' },
-      { label: 'История', to: '/history' },
       { label: 'Импорт', to: '/import' },
     ],
   },

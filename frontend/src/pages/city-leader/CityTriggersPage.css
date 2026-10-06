@@ -1,0 +1,20 @@
+.trigger-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 14px; align-items: start; }
+.trigger-rules { position: sticky; top: 16px; }
+.trigger-rule { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.trigger-rule:last-child { border-bottom: 0; }
+.trigger-rule > .chip { margin-left: 8px; }
+.trigger-rule p { margin: 6px 0; }
+.trigger-error { color: var(--danger); }
+.trigger-outcome { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.trigger-inline-form { display: grid; gap: 6px; min-width: 180px; }
+.trigger-inline-form label, .trigger-exemption-form label { display: grid; gap: 5px; }
+.trigger-monitoring { display: grid; gap: 14px; }
+.trigger-leader { margin: 14px 0; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.trigger-exemption { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.trigger-exemption > span { overflow-wrap: anywhere; }
+.trigger-exemption-form { display: flex; align-items: end; gap: 8px; margin-top: 8px; }
+.trigger-exemption-form label { flex: 1; }
+.trigger-checks { display: grid; gap: 12px; }
+.trigger-checks ul { padding-left: 20px; margin: 6px 0; }
+@media (max-width: 1100px) { .trigger-layout { grid-template-columns: minmax(0, 1fr); } .trigger-rules { position: static; } }
+@media (max-width: 640px) { .city-triggers .page-header { align-items: start; flex-wrap: wrap; } .trigger-exemption-form { display: grid; } }

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessService, Actor } from '../common/access.service';
 import { ReportsService } from '../reports/reports.service';
+import { isPendingTriggerSuppressed, triggerLeaderInclude } from '../ipv-triggers/trigger-visibility';
 
 @Injectable()
 export class DashboardService {
@@ -10,9 +11,13 @@ export class DashboardService {
   return this.getCityLeaderDashboard(user);
  }
  async getCityLeaderDashboard(user: Actor) {
-  const coffeeShops = await this.prisma.coffeeShop.findMany({where: {AND:[this.access.shopWhere(user)],isActive:true},include:{city:true}});
+  const shops = await this.prisma.coffeeShop.findMany({where: {AND:[this.access.shopWhere(user)],isActive:true},include:{city:true,...triggerLeaderInclude}});
+  const coffeeShops = shops.map(({assignments,...shop})=>shop);
   const reports = await this.reports.getReportsByUser(user);
-  const ipvStatuses = await this.prisma.iPVStatus.findMany({where:{coffeeShopId:{in:coffeeShops.map(s=>s.id)}}});
+  const statuses = await this.prisma.iPVStatus.findMany({where:{coffeeShopId:{in:coffeeShops.map(s=>s.id)}}});
+  const now = new Date();
+  const configs = statuses.some(status=>status.status==='NOT_STARTED') ? await this.prisma.triggerConfig.findMany() : [];
+  const ipvStatuses = statuses.filter(status=>status.status!=='NOT_STARTED'||!isPendingTriggerSuppressed(shops.find(shop=>shop.id===status.coffeeShopId)!,now,configs.find(config=>config.code===status.triggerCode)));
   return {coffeeShops,reports,ipvStatuses};
  }
  async getCooDashboard(user: Actor) {

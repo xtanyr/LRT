@@ -50,7 +50,7 @@ export default function App() {
         <Route path="metrics" element={<RequireRole roles={['ADMIN']}><AdminMetricsPage /></RequireRole>} />
         <Route path="structure" element={<RequireRole roles={['ADMIN']}><AdminStructurePage /></RequireRole>} />
         <Route path="config" element={<RequireRole roles={['ADMIN']}><AdminConfigPage /></RequireRole>} />
-        <Route path="history" element={<RequireRole roles={['ADMIN']}><AdminHistoryPage /></RequireRole>} />
+        <Route path="history" element={<RequireRole roles={['ADMIN']} strict><AdminHistoryPage /></RequireRole>} />
         <Route path="import" element={<RequireRole roles={['ADMIN', 'COO']}><AdminImportPage /></RequireRole>} />
         <Route path="users" element={<RequireRole roles={['ADMIN']}><AdminUsersPage /></RequireRole>} />
       </Route>
