@@ -69,6 +69,71 @@ describe('LeaderReportPage', () => {
   expect(input.className).toContain('metric-zone-red');
  });
 
+ describe('archived metrics', () => {
+  const loadReportWithArchivedMetric = (isEditable:boolean, archivedValue:number = 250) => {
+   const report={
+    id:44,coffeeShopId:7,year:2026,month:9,revenue:1000,drinksCount:50,isEditable,isLocked:!isEditable,
+    metricValues:[{metricId:1,absoluteValue:70},{metricId:2,absoluteValue:archivedValue}],analyses:[],
+    formData:{metricPlan_2:'275'},
+    score:{rating:isEditable?8:16,maxPoints:isEditable?8:16,results:[{metricId:1,zone:'TARGET',pointsAwarded:8},...(!isEditable?[{metricId:2,zone:'TARGET',pointsAwarded:8}]:[])]},
+   };
+   vi.mocked(api.get).mockImplementation(async url => ({data:
+    url==='/metrics' ? [
+     {id:1,name:'eNPS',code:'ENPS',unit:'%',section:'TEAM_GUESTS',displayOrder:1,isActive:true},
+     {id:2,name:'Доля депозита в выручке',code:'DEPOSIT',unit:'%',section:'TEAM_GUESTS',displayOrder:2,isActive:false},
+    ] : url==='/coffee-shops' ? [{id:7,name:'Тестовая кофейня'}] :
+    url==='/admin/analysis-questions' ? [] :
+    url==='/reports/editing-policy' ? {historicalEditingEnabled:false} : report
+   }) as any);
+   vi.mocked(api.post).mockImplementation(async (_url,body) => ({data:{...report,...(body as object)}}) as any);
+  };
+
+  it('hides an archived metric in an editable report and leaves its stored plan intact when saving', async () => {
+   loadReportWithArchivedMetric(true);
+   render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+   const metric=await screen.findByLabelText('eNPS');
+   expect(screen.queryByLabelText('Доля депозита в выручке')).not.toBeInTheDocument();
+   expect(screen.queryByLabelText('План: Доля депозита в выручке')).not.toBeInTheDocument();
+   expect(screen.getByText('Рейтинг').parentElement?.querySelector('strong')).toHaveTextContent('8');
+   fireEvent.change(metric,{target:{value:'80'}});
+   await waitFor(()=>expect(api.post).toHaveBeenCalledWith('/reports/draft',expect.objectContaining({
+    metricValues:[{metricId:1,absoluteValue:'80'}],formData:{metricPlan_2:'275'},
+   })),{timeout:2500});
+   await waitFor(()=>expect(metric).toBeEnabled());
+   expect(screen.queryByLabelText('Доля депозита в выручке')).not.toBeInTheDocument();
+   expect(screen.getByText('Рейтинг').parentElement?.querySelector('strong')).toHaveTextContent('8');
+  });
+
+  it('does not let a hidden archived value block editing active metrics', async () => {
+   loadReportWithArchivedMetric(true,-250);
+   render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+   fireEvent.change(await screen.findByLabelText('eNPS'),{target:{value:'80'}});
+   await waitFor(()=>expect(api.post).toHaveBeenCalledWith('/reports/draft',expect.objectContaining({
+    metricValues:[{metricId:1,absoluteValue:'80'}],
+   })),{timeout:2500});
+   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows the server score maximum after metrics are archived', async () => {
+   loadReportWithArchivedMetric(true);
+   render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+   await screen.findByLabelText('eNPS');
+   expect(screen.getByText('Рейтинг').parentElement).toHaveTextContent('из 8 баллов');
+  });
+
+  it('retains archived facts, colors and the stored rating in a read-only historical report', async () => {
+   loadReportWithArchivedMetric(false);
+   render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+   const archived=await screen.findByLabelText('Доля депозита в выручке');
+   expect(archived).toHaveValue('250');
+   expect(archived).toBeDisabled();
+   expect(archived.className).toContain('metric-zone-green');
+   expect(screen.getByLabelText('План: Доля депозита в выручке')).toHaveValue('275');
+   expect(screen.getByText('Рейтинг').parentElement?.querySelector('strong')).toHaveTextContent('16');
+   expect(api.post).not.toHaveBeenCalled();
+  });
+ });
+
  it.each([true,false])('shows report example help in the header when isEditable is %s', async isEditable => {
   vi.mocked(api.get).mockImplementation(async path => ({data:
    path==='/metrics' ? [{id:1,name:'eNPS',code:'ENPS',unit:'%',section:'TEAM_GUESTS',displayOrder:1}] :

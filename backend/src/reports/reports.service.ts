@@ -60,12 +60,14 @@ export class ReportsService {
     const where = { coffeeShopId_year_month: { coffeeShopId, year, month } };
     const existing = await this.prisma.monthlyReport.findUnique({ where });
     if (existing) this.editable(existing);
-    const metrics = await this.prisma.metric.findMany({ where: { isActive: true } });
-    const values = (data.metricValues || []).map((v: any) => {
+    const knownMetrics = await this.prisma.metric.findMany();
+    const values = (data.metricValues || []).flatMap((v: any) => {
       const metricId = positiveId(v?.metricId);
-      const metric = metrics.find(m => m.id === metricId);
-      if (!metric) throw new BadRequestException('Неизвестная или архивная метрика');
-      return { metricId, absoluteValue: nonNegativeNumberValue(v.absoluteValue, metric.name, true) };
+      const metric = knownMetrics.find(m => m.id === metricId);
+      if (!metric) throw new BadRequestException('Неизвестная метрика');
+      // A previously loaded form can still send archived values; keep their stored history unchanged.
+      if (metric.isActive === false) return [];
+      return [{ metricId, absoluteValue: nonNegativeNumberValue(v.absoluteValue, metric.name, true) }];
     });
     const questions = await this.prisma.analysisQuestion.findMany({ where: { isActive: true } });
     const analyses = (data.analyses || []).map((a: any) => {
@@ -84,10 +86,12 @@ export class ReportsService {
     return this.prisma.$transaction(async tx => {
       const before = await tx.monthlyReport.findUnique({ where, include: includeReport });
       if (before) this.editable(before);
+      const metrics = await tx.metric.findMany({ where: { isActive: true } });
+      const activeValues = values.filter((value: { metricId: number }) => metrics.some(metric => metric.id === value.metricId));
       const saved = await tx.monthlyReport.upsert({ where,
         create: { coffeeShopId, year, month, revenue, drinksCount, formData },
         update: { revenue, drinksCount, ...(data.formData !== undefined ? { formData } : {}) } });
-      for (const value of values) await tx.metricValue.upsert({ where: { reportId_metricId: { reportId: saved.id, metricId: value.metricId } }, create: { reportId: saved.id, ...value }, update: { absoluteValue: value.absoluteValue } });
+      for (const value of activeValues) await tx.metricValue.upsert({ where: { reportId_metricId: { reportId: saved.id, metricId: value.metricId } }, create: { reportId: saved.id, ...value }, update: { absoluteValue: value.absoluteValue } });
       for (const a of analyses) await tx.reportAnalysis.upsert({ where: { reportId_questionKey: { reportId: saved.id, questionKey: a.questionKey } }, create: { reportId: saved.id, ...a }, update: { content: a.content } });
       const after = await tx.monthlyReport.findUniqueOrThrow({ where: { id: saved.id }, include: includeReport });
       const snapshot = calculateScore(metrics, after);
@@ -99,7 +103,7 @@ export class ReportsService {
       for (const key of new Set([...Object.keys(previousFormData), ...Object.keys(nextFormData)])) {
         changes.push([`formData:${key}`, previousFormData[key], nextFormData[key]]);
       }
-      for (const v of values) changes.push([`metric:${v.metricId}`, before?.metricValues.find(m => m.metricId === v.metricId)?.absoluteValue?.toString() ?? null, v.absoluteValue?.toString() ?? null]);
+      for (const v of activeValues) changes.push([`metric:${v.metricId}`, before?.metricValues.find(m => m.metricId === v.metricId)?.absoluteValue?.toString() ?? null, v.absoluteValue?.toString() ?? null]);
       for (const a of analyses) changes.push([`analysis:${a.questionKey}`, before?.analyses.find(x => x.questionKey === a.questionKey)?.content ?? '', a.content]);
       for (const [fieldChanged, oldValue, newValue] of changes) if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) await tx.reportEditLog.create({ data: { reportId: saved.id, editedById: user.id!, fieldChanged, oldValue: JSON.stringify(oldValue) ?? null, newValue: JSON.stringify(newValue) ?? null } });
       return this.decorate({ ...after, ratingSnapshot: snapshot }, metrics);

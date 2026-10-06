@@ -8,8 +8,8 @@ import HelpTooltip from '../../components/HelpTooltip';
 import '../../styles/pages.css';
 import './LeaderReportPage.css';
 
-type Report = { id?: number; coffeeShopId: number; year: number; month: number; revenue: string | number; drinksCount: string | number; status?: string; isLocked?: boolean; isEditable?: boolean; submittedAt?: string; metricValues: {metricId: number; absoluteValue: string | number | null}[]; analyses: {questionKey: string; content: string}[]; formData?: Record<string, any>; score?: {rating: number; results: {metricId: number; zone: string | null; pointsAwarded: number | null}[]} };
-type Metric = {id: number; name: string; code: string; unit: string; section: string; displayOrder: number};
+type Report = { id?: number; coffeeShopId: number; year: number; month: number; revenue: string | number; drinksCount: string | number; status?: string; isLocked?: boolean; isEditable?: boolean; submittedAt?: string; metricValues: {metricId: number; absoluteValue: string | number | null}[]; analyses: {questionKey: string; content: string}[]; formData?: Record<string, any>; score?: {rating: number; maxPoints?: number; results: {metricId: number; zone: string | null; pointsAwarded: number | null}[]} };
+type Metric = {id: number; name: string; code: string; unit: string; section: string; displayOrder: number; isActive?: boolean};
 type Question = {questionKey: string; label: string; section: string; displayOrder: number};
 const blocks = ['Команда и гости', 'Labor Cost', 'Себестоимость', 'Расходы', 'Итоги месяца'];
 const blockFor = (section: string) => ['LABOR_COST','PERFORMANCE','PERSONNEL_COSTS'].includes(section) ? 1 : ['COSTING','DESSERT_WRITEOFF','PRODUCT_WRITEOFF','FREE_ACCESS'].includes(section) ? 2 : ['EXPENSES','ADMIN_COSTS','RENT','EQUIPMENT'].includes(section) ? 3 : section === 'SUMMARY' ? 4 : 0;
@@ -82,6 +82,9 @@ export default function LeaderReportPage() {
  const [year,month]=period.split('-').map(Number);
  const historical=Boolean(report?.isLocked||Date.now()>=Date.UTC(year,month+1,1,-3));
  const locked=typeof report?.isEditable==='boolean'?!report.isEditable:!historicalEditingEnabled&&historical;
+ const activeMetrics=metrics.filter(metric=>metric.isActive!==false);
+ const activeValues=report?.metricValues.filter(value=>activeMetrics.some(metric=>metric.id===value.metricId))||[];
+ const visibleMetrics=locked?metrics.filter(metric=>metric.isActive!==false||report?.metricValues.some(value=>value.metricId===metric.id)||report?.score?.results?.some(result=>result.metricId===metric.id)):activeMetrics;
  const testEditing=historical&&!locked;
  const overdue=Date.now()>=Date.UTC(year,month,10,9)&&report?.status!=='SUBMITTED';
  useEffect(()=>{
@@ -103,15 +106,15 @@ export default function LeaderReportPage() {
  const change=(fn:(r:Report)=>Report)=>{if(!locked&&!saving){setReport(r=>r?fn(r):r);setDirty(true);setAutosaveState('waiting');}};
  const field=(key:string,value:string)=>change(r=>({...r,formData:{...r.formData,[key]:value}}));
  const value=(r:Report|null,id:number)=>r?.metricValues.find(v=>v.metricId===id)?.absoluteValue??'';
- const negativeError=report?negativeValueMessage(report,metrics):'';
+ const negativeError=report?negativeValueMessage({...report,metricValues:activeValues},activeMetrics):'';
  const visibleError=negativeError||error;
  const giftsLinkHref=httpUrl(report?.formData?.giftsLink);
  const save=async(submit:boolean,automatic=false)=>{
   if(!report||locked||saving)return;
-  if(negativeValueMessage(report,metrics)){setAutosaveState('error');return;}
+  if(negativeError){setAutosaveState('error');return;}
   setSaving(true);setError('');if(automatic)setAutosaveState('saving');
   try {
-   const saved=unwrap(await api.post('/reports/draft',{coffeeShopId:shopId,year,month,revenue:report.revenue||0,drinksCount:report.drinksCount||0,metricValues:report.metricValues,analyses:report.analyses,formData:report.formData||{}}));
+   const saved=unwrap(await api.post('/reports/draft',{coffeeShopId:shopId,year,month,revenue:report.revenue||0,drinksCount:report.drinksCount||0,metricValues:activeValues,analyses:report.analyses,formData:report.formData||{}}));
    setReport(normalizeReport(saved,emptyReport(shopId,year,month)));setDirty(false);setAutosaveState('idle');
    if(submit)setReport(normalizeReport(unwrap(await api.post('/reports/'+saved.id+'/submit')),emptyReport(shopId,year,month)));
    if(!automatic)toast.show(submit?'Отчёт отправлен':'Черновик сохранён','success');
@@ -132,10 +135,10 @@ export default function LeaderReportPage() {
       <div className="page-header leader-report-header"><div><h1 className="page-title">Отчёт за {period}</h1><div className="leader-report-example"><HelpTooltip label="Пример заполнения отчёта" triggerText="Пример заполнения отчёта">Пример скоро появится. Ссылка на заполненный отчёт будет добавлена позже.</HelpTooltip></div><div className="leader-report-meta"><span className="badge">{reportState}</span><span className={'leader-save-status '+(visibleError?'is-error':autosaveState)} role={visibleError?'alert':'status'} aria-live="polite">{saveStatus}</span></div></div><div className="page-actions"><button className="btn btn-primary" disabled={!report||locked||saving} onClick={()=>save(true)}>Отправить отчёт</button></div></div>
   <div className="card leader-report-controls"><label><span>Кофейня</span><SelectControl label="Кофейня" value={shopId} disabled={dirty||saving} onChange={value=>setShopId(Number(value))} options={shops.map(s=>({value:s.id,label:s.name}))}/></label><label className="period-control"><span>Отчётный период</span><MonthPicker label="Период" value={period} disabled={dirty||saving} onChange={setPeriod}/></label><aside className="leader-deadline"><strong>{testEditing?'Тестовый режим':'Сроки отчёта'}</strong><span>{testEditing?'Редактирование прошлых месяцев открыто для проверки триггеров.':'Сдать до 10-го числа следующего месяца, 12:00 МСК. Редактирование открыто до конца следующего месяца.'}</span>{report?.submittedAt&&<span className="leader-submitted"><b>Отправлен</b>{new Date(report.submittedAt).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК</span>}</aside></div>
   {loading?<LoadingState variant="panel" label="Загружаем отчёт" />:!shops.length?<p>Нет доступных кофеен. Обратитесь к администратору для назначения.</p>:report&&<>
-   <div className="report-section-toolbar"><div className="tabs">{blocks.map((label,index)=><button key={label} className={'tab'+(activeBlock===index?' active':'')} onClick={()=>setActiveBlock(index)}>{label}</button>)}</div><div className={'report-rating'+(report.score?.rating==null?'':report.score.rating>=80?' metric-zone-green':report.score.rating>=50?' metric-zone-yellow':' metric-zone-red')}><span>Рейтинг</span><strong>{dirty&&!negativeError?'…':report.score?.rating??'—'}</strong><small>{negativeError?'Последний сохранённый рейтинг':dirty?'Пересчитываем после сохранения':'из 100 баллов'}</small></div></div>
+   <div className="report-section-toolbar"><div className="tabs">{blocks.map((label,index)=><button key={label} className={'tab'+(activeBlock===index?' active':'')} onClick={()=>setActiveBlock(index)}>{label}</button>)}</div><div className={'report-rating'+(report.score?.rating==null?'':report.score.rating>=80?' metric-zone-green':report.score.rating>=50?' metric-zone-yellow':' metric-zone-red')}><span>Рейтинг</span><strong>{dirty&&!negativeError?'…':report.score?.rating??'—'}</strong><small>{negativeError?'Последний сохранённый рейтинг':dirty?'Пересчитываем после сохранения':'из '+(report.score?.maxPoints??100)+' баллов'}</small></div></div>
    {activeBlock===1&&<section className="card labor-overview" aria-label="Выручка и напитки"><div className="labor-overview-header"><div><h2 className="card-title">Выручка и напитки</h2><p>Факт за выбранный период и план на следующий месяц.</p></div><div className="labor-previous"><span>Предыдущий факт</span><strong>{previous?.revenue??'—'} ₽</strong><strong>{previous?.drinksCount??'—'} напитков</strong></div></div><div className="labor-overview-grid"><label><span>Выручка, ₽</span>{input('Выручка',report.revenue,v=>change(r=>({...r,revenue:v})))}</label><label><span>План выручки</span>{input('План выручки',report.formData?.revenuePlan,v=>field('revenuePlan',v))}</label><label><span>Количество напитков</span>{input('Количество напитков',report.drinksCount,v=>change(r=>({...r,drinksCount:v})))}</label><label><span>План напитков</span>{input('План напитков',report.formData?.drinksPlan,v=>field('drinksPlan',v))}</label></div></section>}
    {activeBlock!==4&&<div className="card table-wrap"><table className="table"><thead><tr><th>Показатель</th><th>Предыдущий факт</th><th>Текущий факт</th><th>План следующего месяца</th></tr></thead><tbody>
-    {metrics.filter(m=>(['FREE_ACCESS','DEPOSIT'].includes(m.code)?0:blockFor(m.section||m.code))===activeBlock).sort((a,b)=>a.displayOrder-b.displayOrder).map(m=>{
+    {visibleMetrics.filter(m=>(['FREE_ACCESS','DEPOSIT'].includes(m.code)?0:blockFor(m.section||m.code))===activeBlock).sort((a,b)=>a.displayOrder-b.displayOrder).map(m=>{
      const share=['LABOR_COST','FREE_ACCESS','DEPOSIT','DESSERT_WRITEOFF','PRODUCT_WRITEOFF'].includes(m.code);
      return <tr key={m.id}><td><span className="report-metric-label">{m.name}{articleHelp(m.code)}</span><div className="helper-text">{share?'Сумма, ₽; доля от выручки автоматически':m.unit}</div></td><td>{value(previous,m.id)===''?'—':value(previous,m.id)}</td><td>{input(m.name,value(report,m.id),v=>change(r=>({...r,metricValues:[...r.metricValues.filter(x=>x.metricId!==m.id),{metricId:m.id,absoluteValue:v}]})),metricClass(m.id))}</td><td>{input('План: '+m.name,report.formData?.['metricPlan_'+m.id],v=>field('metricPlan_'+m.id,v))}</td></tr>;
     })}
