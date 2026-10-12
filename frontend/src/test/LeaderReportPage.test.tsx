@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import ToastProvider from '../components/ToastProvider';
 import LeaderReportPage from '../pages/leader/LeaderReportPage';
 import { api } from '../services/api';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 describe('LeaderReportPage', () => {
  beforeEach(() => {
@@ -134,7 +134,7 @@ describe('LeaderReportPage', () => {
   });
  });
 
- it.each([true,false])('shows report example help in the header when isEditable is %s', async isEditable => {
+ it.each([true,false])('links to the report example with the selected shop and period when isEditable is %s', async isEditable => {
   vi.mocked(api.get).mockImplementation(async path => ({data:
    path==='/metrics' ? [{id:1,name:'eNPS',code:'ENPS',unit:'%',section:'TEAM_GUESTS',displayOrder:1}] :
    path==='/coffee-shops' ? [{id:7,name:'Тестовая кофейня'}] :
@@ -142,23 +142,33 @@ describe('LeaderReportPage', () => {
    path==='/reports/editing-policy' ? {historicalEditingEnabled:false} :
    {id:44,coffeeShopId:7,year:2026,month:9,revenue:1000,drinksCount:50,isEditable,metricValues:[],analyses:[],formData:{}}
   }) as any);
-  render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+  render(<MemoryRouter initialEntries={['/report?period=2026-09&shop=7']}><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
   await screen.findByLabelText('eNPS');
-  const help=screen.getByRole('button',{name:'Подсказка: Пример заполнения отчёта'});
-  expect(help).toHaveTextContent('Пример заполнения отчёта');
-  expect(help.closest('.leader-report-header')).not.toBeNull();
-  expect(help).toBeEnabled();
-  fireEvent.mouseEnter(help);
-  expect(screen.getByRole('tooltip')).toHaveTextContent('Пример скоро появится');
-  expect(within(screen.getByRole('tooltip')).queryByRole('link')).not.toBeInTheDocument();
-  fireEvent.keyDown(help,{key:'Escape'});
+  const example=screen.getByRole('link',{name:'Пример заполнения отчёта'});
+  expect(example.closest('.leader-report-example')).not.toBeNull();
+  expect(example).toHaveAttribute('href','/report-example?period=2026-09&shop=7');
   fireEvent.click(screen.getByRole('button',{name:'Расходы'}));
-  fireEvent.focus(help);
-  expect(screen.getByRole('tooltip')).toHaveTextContent('Пример скоро появится');
-  fireEvent.keyDown(help,{key:'Escape'});
-  fireEvent.click(help);
-  expect(screen.getByRole('tooltip')).toHaveTextContent('Пример скоро появится');
+  expect(example).toHaveAttribute('href','/report-example?period=2026-09&shop=7');
+  fireEvent.click(screen.getByRole('button',{name:'Период'}));
+  fireEvent.click(screen.getByRole('button',{name:'авг'}));
+  expect(example).toHaveAttribute('href','/report-example?period=2026-08&shop=7');
   expect(api.post).not.toHaveBeenCalled();
+ });
+
+ it('waits for autosave before leaving the report for its example', async () => {
+  render(<MemoryRouter initialEntries={['/report?period=2026-09&shop=7']}><ToastProvider><Routes>
+   <Route path="/report" element={<LeaderReportPage/>}/>
+   <Route path="/report-example" element={<h1>Учебный отчёт</h1>}/>
+  </Routes></ToastProvider></MemoryRouter>);
+  fireEvent.change(await screen.findByLabelText('eNPS'),{target:{value:'95'}});
+  const example=screen.getByRole('link',{name:'Пример заполнения отчёта'});
+  fireEvent.click(example);
+  expect(screen.queryByRole('heading',{name:'Учебный отчёт'})).not.toBeInTheDocument();
+  expect(screen.getByLabelText('eNPS')).toHaveValue('95');
+  await waitFor(()=>expect(api.post).toHaveBeenCalledWith('/reports/draft',expect.objectContaining({metricValues:[{metricId:1,absoluteValue:'95'}]})),{timeout:2500});
+  await waitFor(()=>expect(example).not.toHaveAttribute('aria-disabled','true'));
+  fireEvent.click(example);
+  expect(screen.getByRole('heading',{name:'Учебный отчёт'})).toBeInTheDocument();
  });
 
  it('offers placeholder help for all seven expense articles without saving report data', async () => {
@@ -290,7 +300,6 @@ describe('LeaderReportPage', () => {
   ['Количество напитков','Labor Cost'],
   ['План выручки','Labor Cost'],
   ['План напитков','Labor Cost'],
-  ['ИНПС','Команда и гости'],
   ['План: Подарки, ₽','Команда и гости'],
   ['Административные затраты, ₽','Расходы'],
   ['План: Оборудование, материалы, ремонт, ₽','Расходы'],

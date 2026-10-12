@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
+import { useReportExampleHelp } from '../../services/report-example-help';
 import { useToast } from '../../components/ToastProvider';
 import { MonthPicker, SelectControl } from '../../components/SelectControl';
 import LoadingState from '../../components/LoadingState';
@@ -30,7 +31,6 @@ const analysisSections: {section: string; title: string; hint: string}[] = [
  {section:'SUMMARY',title:'Итоги месяца',hint:'Главные выводы и действия на следующий месяц'},
 ];
 const extras = [
-  {key:'inps',label:'ИНПС',block:0,hint:'Источник: лидер города'},
   {key:'gifts',label:'Подарки, ₽',block:0,hint:'Сумма подарков за месяц',share:true},
   {key:'personnelCosts',label:'Расходы на персонал, ₽',block:1,hint:'НДФЛ, ФСС, доставка, питание, корпоративные мероприятия, обучение, медосмотр, командировочные, страховые взносы, форма, прочие расходы',share:true},
   {key:'freeAccess',label:'Свободный доступ, ₽',block:2,hint:'Источник: финансовый дашборд',share:true},
@@ -67,6 +67,7 @@ const negativeValueMessage = (report:Report,metrics:Metric[]):string => {
 };
 
 export default function LeaderReportPage() {
+ const exampleHelp=useReportExampleHelp();
  const toast=useToast();
  const [params]=useSearchParams();
  const today=new Date(Date.now()+10800000), initial=prevPeriod(today.getUTCFullYear(),today.getUTCMonth()+1);
@@ -80,6 +81,9 @@ export default function LeaderReportPage() {
  const [autosaveState,setAutosaveState]=useState<'idle'|'waiting'|'saving'|'error'>('idle');
  const [expandedAnalysisSection,setExpandedAnalysisSection]=useState<string|null>(null);
  const [year,month]=period.split('-').map(Number);
+ const exampleParams=new URLSearchParams(params);
+ exampleParams.set('period',period);
+ if(shopId)exampleParams.set('shop',String(shopId));
  const historical=Boolean(report?.isLocked||Date.now()>=Date.UTC(year,month+1,1,-3));
  const locked=typeof report?.isEditable==='boolean'?!report.isEditable:!historicalEditingEnabled&&historical;
  const activeMetrics=metrics.filter(metric=>metric.isActive!==false);
@@ -132,7 +136,15 @@ export default function LeaderReportPage() {
  const activeQuestions=activeAnalysisGroups.flatMap(group=>group.questions);
  const answeredQuestions=activeQuestions.filter(question=>report?.analyses.some(answer=>answer.questionKey===question.questionKey&&answer.content.trim().length>=3)).length;
  return <div className="page leader-report">
-      <div className="page-header leader-report-header"><div><h1 className="page-title">Отчёт за {period}</h1><div className="leader-report-example"><HelpTooltip label="Пример заполнения отчёта" triggerText="Пример заполнения отчёта">Пример скоро появится. Ссылка на заполненный отчёт будет добавлена позже.</HelpTooltip></div><div className="leader-report-meta"><span className="badge">{reportState}</span><span className={'leader-save-status '+(visibleError?'is-error':autosaveState)} role={visibleError?'alert':'status'} aria-live="polite">{saveStatus}</span></div></div><div className="page-actions"><button className="btn btn-primary" disabled={!report||locked||saving} onClick={()=>save(true)}>Отправить отчёт</button></div></div>
+      <div className="page-header leader-report-header"><div><h1 className="page-title">Отчёт за {period}</h1><div className="leader-report-meta"><span className="badge">{reportState}</span><span className={'leader-save-status '+(visibleError?'is-error':autosaveState)} role={visibleError?'alert':'status'} aria-live="polite">{saveStatus}</span></div></div><div className="page-actions"><button className="btn btn-primary" disabled={!report||locked||saving} onClick={()=>save(true)}>Отправить отчёт</button></div></div>
+  <div className={'leader-report-example'+(exampleHelp.dismissed?' is-subtle':' is-prominent')}>
+   {!exampleHelp.dismissed&&<div className="leader-report-help-copy"><strong>Заполняете отчёт впервые?</strong><p>Пройдите пример с подсказками для каждого показателя.</p></div>}
+   <div className="leader-report-help-actions">
+    <Link className={'leader-report-example-link'+(exampleHelp.dismissed?'':' btn btn-primary')} to={'/report-example?'+exampleParams.toString()} aria-disabled={dirty||saving||exampleHelp.saving} title={dirty||saving?'Дождитесь сохранения изменений':undefined} onClick={event=>{if(dirty||saving||exampleHelp.saving)event.preventDefault();}}>Пример заполнения отчёта</Link>
+    {!exampleHelp.dismissed&&<button type="button" className="btn btn-ghost" disabled={!exampleHelp.canSave} onClick={()=>void exampleHelp.dismiss()}>Мне не нужна помощь</button>}
+   </div>
+   {exampleHelp.error&&<p className="leader-report-help-error" role="alert">{exampleHelp.error}</p>}
+  </div>
   <div className="card leader-report-controls"><label><span>Кофейня</span><SelectControl label="Кофейня" value={shopId} disabled={dirty||saving} onChange={value=>setShopId(Number(value))} options={shops.map(s=>({value:s.id,label:s.name}))}/></label><label className="period-control"><span>Отчётный период</span><MonthPicker label="Период" value={period} disabled={dirty||saving} onChange={setPeriod}/></label><aside className="leader-deadline"><strong>{testEditing?'Тестовый режим':'Сроки отчёта'}</strong><span>{testEditing?'Редактирование прошлых месяцев открыто для проверки триггеров.':'Сдать до 10-го числа следующего месяца, 12:00 МСК. Редактирование открыто до конца следующего месяца.'}</span>{report?.submittedAt&&<span className="leader-submitted"><b>Отправлен</b>{new Date(report.submittedAt).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК</span>}</aside></div>
   {loading?<LoadingState variant="panel" label="Загружаем отчёт" />:!shops.length?<p>Нет доступных кофеен. Обратитесь к администратору для назначения.</p>:report&&<>
    <div className="report-section-toolbar"><div className="tabs">{blocks.map((label,index)=><button key={label} className={'tab'+(activeBlock===index?' active':'')} onClick={()=>setActiveBlock(index)}>{label}</button>)}</div><div className={'report-rating'+(report.score?.rating==null?'':report.score.rating>=80?' metric-zone-green':report.score.rating>=50?' metric-zone-yellow':' metric-zone-red')}><span>Рейтинг</span><strong>{dirty&&!negativeError?'…':report.score?.rating??'—'}</strong><small>{negativeError?'Последний сохранённый рейтинг':dirty?'Пересчитываем после сохранения':'из '+(report.score?.maxPoints??100)+' баллов'}</small></div></div>

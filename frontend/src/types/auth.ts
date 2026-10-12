@@ -7,6 +7,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  reportExampleHelpDismissed?: boolean;
   coffeeShops?: { id: number; name: string }[];
   cities?: { id: number; name: string }[];
 }

@@ -59,6 +59,7 @@ model User {
   passwordHash      String?                 @db.VarChar(255)
   googleOauthId     String?                 @unique @db.VarChar(255)
   role              UserRole                @default(LEADER)
+  reportExampleHelpDismissed Boolean         @default(false)
   approvedAt        DateTime?
   coffeeShopAssignments UserCoffeeShopAssignment[]
   cityAssignments   UserCityAssignment[]

@@ -123,8 +123,8 @@ describe('report edit history', () => {
   it('shows legacy formData changes per field and leaves unchanged values out', async () => {
     loadEvents([{
       ...reportEdit, fieldChanged: 'formData',
-      oldValue: '{"metricPlan_1":90,"gifts":1,"equipmentLink":null,"revenuePlan":10}',
-      newValue: '{"metricPlan_1":0,"gifts":1,"equipmentLink":"","adminCosts":0}',
+      oldValue: '{"metricPlan_1":90,"gifts":1,"equipmentLink":null,"revenuePlan":10,"inps":90,"inpsPlan":95}',
+      newValue: '{"metricPlan_1":0,"gifts":1,"equipmentLink":"","adminCosts":0,"inps":100,"inpsPlan":100}',
     }], []);
     renderHistory();
     const plan = (await screen.findByText('План: eNPS')).closest('tr')!;
@@ -142,11 +142,14 @@ describe('report edit history', () => {
       { ...reportEdit, id: 2, fieldChanged: 'formData:metricPlan_1', oldValue: '90', newValue: '95' },
       { ...reportEdit, id: 3, fieldChanged: 'formData:giftsPlan', oldValue: 'null', newValue: '1000' },
       { ...reportEdit, id: 4, fieldChanged: 'metric:999', oldValue: '"1"', newValue: '"2"' },
+      { ...reportEdit, id: 5, fieldChanged: 'formData:inps', oldValue: '90', newValue: '100' },
+      { ...reportEdit, id: 6, fieldChanged: 'formData:inpsPlan', oldValue: '95', newValue: '100' },
     ], []);
     renderHistory();
     expect(await screen.findByText('План: eNPS')).toBeInTheDocument();
     expect(screen.getByText('План: Подарки, ₽')).toBeInTheDocument();
     expect(screen.getByText('Метрика #999 · факт')).toBeInTheDocument();
+    expect(rows()).toHaveLength(3);
     expect(api.get).not.toHaveBeenCalledWith('/metrics');
   });
 

@@ -52,7 +52,7 @@ const CATEGORIES = [
 ] as const;
 
 const FORM_FIELDS: Record<string, string> = {
-  inps: 'ИНПС', gifts: 'Подарки, ₽', personnelCosts: 'Расходы на персонал, ₽',
+  gifts: 'Подарки, ₽', personnelCosts: 'Расходы на персонал, ₽',
   freeAccess: 'Свободный доступ, ₽', adminCosts: 'Административные затраты, ₽',
   rent: 'Аренда, ₽', equipment: 'Оборудование, материалы, ремонт, ₽',
   revenuePlan: 'План выручки', drinksPlan: 'План напитков',
@@ -78,6 +78,7 @@ function formObject(value: string | null): Record<string, unknown> | null {
 }
 
 function reportEntries(entry: ReportEntry): HistoryEntry[] {
+  if (['formData:inps', 'formData:inpsPlan'].includes(entry.fieldChanged)) return [];
   const normalized: HistoryEntry = {
     ...entry, rowId: `report:${entry.id}`, source: 'report',
     changedAt: entry.editedAt, changedBy: entry.editedBy,
@@ -86,7 +87,7 @@ function reportEntries(entry: ReportEntry): HistoryEntry[] {
   const before = formObject(entry.oldValue), after = formObject(entry.newValue);
   if (!before || !after) return [normalized];
   return [...new Set([...Object.keys(before), ...Object.keys(after)])].sort()
-    .filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]))
+    .filter((key) => key !== 'inps' && key !== 'inpsPlan' && JSON.stringify(before[key]) !== JSON.stringify(after[key]))
     .map((key) => ({
       ...normalized, rowId: `${normalized.rowId}:${key}`, fieldChanged: `formData:${key}`,
       oldValue: JSON.stringify(before[key] ?? null), newValue: JSON.stringify(after[key] ?? null),

@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Patch,
   Body,
   HttpCode,
   HttpStatus,
@@ -78,6 +79,14 @@ export class AuthController {
     const result = await this.authService.login(user);
     this.setSessionCookie(res, result.accessToken);
     return new ApiResponseDto(true, result, 'Token refreshed');
+  }
+
+  @Patch('report-example-help')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async dismissReportExampleHelp(@Req() req: any) {
+    const result = await this.authService.dismissReportExampleHelp(req.user.id);
+    return new ApiResponseDto(true, result, 'Report example help preference saved');
   }
 
   @Post('forgot-password')

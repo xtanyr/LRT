@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { api } from '../../services/api';
 import LoadingState from '../../components/LoadingState';
 import '../../styles/pages.css';
@@ -16,6 +17,7 @@ interface Metric {
 }
 
 export default function LeaderMethodologyPage() {
+  const { search } = useLocation();
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -46,6 +48,7 @@ export default function LeaderMethodologyPage() {
           <h1 className="page-title">Как считается рейтинг</h1>
           <div className="page-sub">актуальные пороги и баллы</div>
         </div>
+        <Link className="btn btn-secondary" to={'/report-example'+search}>Пример заполнения отчёта</Link>
       </div>
 
       <div className="card">

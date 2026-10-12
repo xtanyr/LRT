@@ -28,6 +28,11 @@ export const authStore = {
     localStorage.removeItem(VIEW_AS_KEY);
     notify();
   },
+  updateUser(user: Partial<User> & { id: number }) {
+    if (state.user?.id !== user.id) return;
+    state = { ...state, user: { ...state.user, ...user } };
+    notify();
+  },
   setLoading(loading: boolean) {
     state = { ...state, loading };
     notify();

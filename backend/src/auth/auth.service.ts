@@ -50,12 +50,17 @@ export class AuthService {
         name: profile.name,
         email: profile.email,
         role: profile.role,
+        reportExampleHelpDismissed: profile.reportExampleHelpDismissed,
         coffeeShops: profile.coffeeShopAssignments
           .filter((assignment) => assignment.assignedUntil === null)
           .map((assignment) => ({ id: assignment.coffeeShop.id, name: assignment.coffeeShop.name })),
         cities: profile.cityAssignments.map((assignment) => ({ id: assignment.city.id, name: assignment.city.name })),
       },
     };
+  }
+
+  async dismissReportExampleHelp(userId: number) {
+    return this.usersService.dismissReportExampleHelp(userId);
   }
 
   async register(registerDto: {

@@ -59,6 +59,14 @@ export class UsersService {
     });
   }
 
+  async dismissReportExampleHelp(id: number) {
+    return this.prisma.user.update({
+      where: { id },
+      data: { reportExampleHelpDismissed: true },
+      select: { reportExampleHelpDismissed: true },
+    });
+  }
+
   async hashPassword(password: string): Promise<string> {
     return bcrypt.hash(password, 10);
   }

@@ -9,6 +9,7 @@ import LeaderMethodologyPage from './pages/leader/LeaderMethodologyPage';
 import CityShopPage from './pages/city-leader/CityShopPage';
 import CityTriggersPage from './pages/city-leader/CityTriggersPage';
 import LeaderReportPage from './pages/leader/LeaderReportPage';
+import ReportExamplePage from './pages/leader/ReportExamplePage';
 import CooReportsPage from './pages/coo/CooReportsPage';
 import CooReportViewPage from './pages/coo/CooReportViewPage';
 import AdminMetricsPage from './pages/admin/AdminMetricsPage';
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="results" element={<RequireRole roles={['LEADER']}><LeaderResultsPage /></RequireRole>} />
         <Route path="methodology" element={<LeaderMethodologyPage />} />
         <Route path="report" element={<LeaderReportPage />} />
+        <Route path="report-example" element={<ReportExamplePage />} />
         <Route path="shop/:shopId" element={<RequireRole roles={['CITY_LEADER', 'COO', 'ADMIN']}><CityShopPage /></RequireRole>} />
         <Route path="triggers" element={<RequireRole roles={['CITY_LEADER', 'COO', 'ADMIN']}><CityTriggersPage /></RequireRole>} />
         <Route path="cities" element={<RequireRole roles={['COO']}><Navigate to="/?view=cities" replace /></RequireRole>} />
