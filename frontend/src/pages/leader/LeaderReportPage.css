@@ -2,7 +2,7 @@
   color: var(--ink-2);
 }
 
-.page .input {
+.leader-report .input {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 7px 9px;
@@ -12,30 +12,30 @@
   max-width: 140px;
 }
 
-.page .input:focus {
+.leader-report .input:focus {
   outline: none;
   border-color: var(--ink);
   box-shadow: 0 0 0 3px rgba(34, 29, 22, 0.08);
 }
 
-.page .input:disabled {
+.leader-report .input:disabled {
   background: var(--surface-2);
   color: var(--ink-2);
 }
 
-.page .input.metric-zone-green {
+.leader-report .input.metric-zone-green {
   background: #e8f7ee;
   border-color: #2f9e5b;
   color: #14532d;
 }
 
-.page .input.metric-zone-yellow {
+.leader-report .input.metric-zone-yellow {
   background: #fff7d6;
   border-color: #c99816;
   color: #6b4b00;
 }
 
-.page .input.metric-zone-red {
+.leader-report .input.metric-zone-red {
   background: #fdecec;
   border-color: #d34a4a;
   color: #8a1f1f;

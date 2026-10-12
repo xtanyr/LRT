@@ -308,3 +308,9 @@
     padding: 18px 14px 32px;
   }
 }
+
+@media (max-width: 460px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}

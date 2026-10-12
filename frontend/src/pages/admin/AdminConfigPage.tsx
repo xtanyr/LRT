@@ -32,6 +32,9 @@ export default function AdminConfigPage() {
   const [savingId, setSavingId] = useState<number | null>(null);
   const [ruleError, setRuleError] = useState<{id:number;message:string} | null>(null);
   const [savedRule, setSavedRule] = useState('');
+  const [ratingSaving, setRatingSaving] = useState(false);
+  const [ratingError, setRatingError] = useState('');
+  const [ratingSaved, setRatingSaved] = useState(false);
 
   const load = async () => {
     setLoading(true);setLoadError('');
@@ -86,11 +89,20 @@ export default function AdminConfigPage() {
   };
 
   const saveRating = async () => {
-    if (!ratingConfig) return;
+    if (!ratingConfig || ratingSaving) return;
+    setRatingSaving(true);
+    setRatingError('');
+    setRatingSaved(false);
     try {
       await api.patch('/admin/rating-color-config', ratingConfig);
+      setRatingSaved(true);
       toast.show('Сохранено', 'success');
-    } catch {
+    } catch (cause: any) {
+      const message = cause?.response?.data?.message;
+      const details = typeof message === 'string' ? message : Array.isArray(message) ? message.filter((value): value is string => typeof value === 'string').join(', ') : '';
+      setRatingError(details && Number(cause?.response?.status || 0) < 500 ? details : 'Не удалось сохранить цветовые пороги. Введённые значения сохранены в форме, попробуйте ещё раз.');
+    } finally {
+      setRatingSaving(false);
     }
   };
 
@@ -119,14 +131,15 @@ export default function AdminConfigPage() {
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <label className="field">
               <span className="field-label">Зелёная зона ≥</span>
-              <input className="input" type="number" value={ratingConfig.greenThreshold} onChange={(e) => setRatingConfig({ ...ratingConfig, greenThreshold: parseInt(e.target.value) || 0 })} style={{ maxWidth: 120 }} />
+              <input className="input" type="number" disabled={ratingSaving} value={ratingConfig.greenThreshold} onChange={(e) => { setRatingConfig({ ...ratingConfig, greenThreshold: parseInt(e.target.value) || 0 }); setRatingError(''); setRatingSaved(false); }} style={{ maxWidth: 120 }} />
             </label>
             <label className="field">
               <span className="field-label">Красная зона ≤</span>
-              <input className="input" type="number" value={ratingConfig.redThreshold} onChange={(e) => setRatingConfig({ ...ratingConfig, redThreshold: parseInt(e.target.value) || 0 })} style={{ maxWidth: 120 }} />
+              <input className="input" type="number" disabled={ratingSaving} value={ratingConfig.redThreshold} onChange={(e) => { setRatingConfig({ ...ratingConfig, redThreshold: parseInt(e.target.value) || 0 }); setRatingError(''); setRatingSaved(false); }} style={{ maxWidth: 120 }} />
             </label>
-            <button className="btn btn-primary btn-sm" onClick={saveRating}>Сохранить</button>
+            <button className="btn btn-primary btn-sm" disabled={ratingSaving} onClick={saveRating}>{ratingSaving ? 'Сохраняем…' : 'Сохранить'}</button>
           </div>
+          <div className={'config-rating-feedback' + (ratingError ? ' is-error' : '')} role={ratingError ? 'alert' : ratingSaved || ratingSaving ? 'status' : undefined}>{ratingError || (ratingSaving ? 'Сохраняем цветовые пороги…' : ratingSaved ? 'Цветовые пороги сохранены.' : '\u00a0')}</div>
         </div>
       )}
 
@@ -198,9 +211,9 @@ export default function AdminConfigPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontWeight: 500 }}>Google OAuth</div>
-                <div style={{ fontSize: 12, color: 'var(--ink-2)' }}>активен наравне с email+паролем</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-2)' }}>доступен после подключения корпоративного Google</div>
               </div>
-              <span className="chip chip-success">включено</span>
+              <span className="chip chip-ghost">по настройке</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>

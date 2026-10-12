@@ -55,11 +55,16 @@ export default function AdminMetricsPage() {
   const [form, setForm] = useState<FormData>(emptyForm);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   const load = async () => {
+    setLoading(true);
+    setLoadError('');
     try {
       const res = await api.get('/metrics');
       setMetrics(res.data.data || res.data || []);
+    } catch {
+      setLoadError('Не удалось загрузить метрики. Повторите загрузку.');
     } finally {
       setLoading(false);
     }
@@ -183,11 +188,12 @@ export default function AdminMetricsPage() {
           <div className="page-sub">пороги, баллы, направление</div>
         </div>
         <div className="page-actions">
-          <button className="btn btn-primary btn-sm" onClick={openAdd}>Добавить метрику</button>
+          <button className="btn btn-primary btn-sm" disabled={!!loadError} onClick={openAdd}>Добавить метрику</button>
         </div>
       </div>
 
-      <div className="card">
+      {loadError && <div className="card"><p className="form-error" role="alert">{loadError}</p><button className="btn btn-ghost" onClick={() => void load()}>Повторить загрузку</button></div>}
+      {!loadError && <div className="card">
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -232,7 +238,7 @@ export default function AdminMetricsPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
 
       <Modal open={open} title={editing ? 'Изменить метрику' : 'Новая метрика'} onClose={() => setOpen(false)}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

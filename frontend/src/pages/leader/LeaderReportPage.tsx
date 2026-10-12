@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
 import { useReportExampleHelp } from '../../services/report-example-help';
+import { useRatingThresholds } from '../../services/rating-colors';
 import { useToast } from '../../components/ToastProvider';
 import { MonthPicker, SelectControl } from '../../components/SelectControl';
 import LoadingState from '../../components/LoadingState';
@@ -62,6 +63,7 @@ const negativeValueMessage = (report:Report,metrics:Metric[]):string => {
 
 export default function LeaderReportPage() {
  const exampleHelp=useReportExampleHelp();
+ const ratingThresholds=useRatingThresholds();
  const toast=useToast();
  const [params]=useSearchParams();
  const today=new Date(Date.now()+10800000), initial=prevPeriod(today.getUTCFullYear(),today.getUTCMonth()+1);
@@ -141,7 +143,7 @@ export default function LeaderReportPage() {
   </div>
   <div className="card leader-report-controls"><label><span>Кофейня</span><SelectControl label="Кофейня" value={shopId} disabled={dirty||saving} onChange={value=>setShopId(Number(value))} options={shops.map(s=>({value:s.id,label:s.name}))}/></label><label className="period-control"><span>Отчётный период</span><MonthPicker label="Период" value={period} disabled={dirty||saving} onChange={setPeriod}/></label><aside className="leader-deadline"><strong>{testEditing?'Тестовый режим':'Сроки отчёта'}</strong><span>{testEditing?'Редактирование прошлых месяцев открыто для проверки триггеров.':'Сдать до 10-го числа следующего месяца, 12:00 МСК. Редактирование открыто до конца следующего месяца.'}</span>{report?.submittedAt&&<span className="leader-submitted"><b>Отправлен</b>{new Date(report.submittedAt).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК</span>}</aside></div>
   {loading?<LoadingState variant="panel" label="Загружаем отчёт" />:!shops.length?<p>Нет доступных кофеен. Обратитесь к администратору для назначения.</p>:report&&<>
-   <div className="report-section-toolbar"><div className="tabs">{blocks.map((label,index)=><button key={label} className={'tab'+(activeBlock===index?' active':'')} onClick={()=>setActiveBlock(index)}>{label}</button>)}</div><div className={'report-rating'+(report.score?.rating==null?'':report.score.rating>=80?' metric-zone-green':report.score.rating>=50?' metric-zone-yellow':' metric-zone-red')}><span>Рейтинг</span><strong>{dirty&&!negativeError?'…':report.score?.rating??'—'}</strong><small>{negativeError?'Последний сохранённый рейтинг':dirty?'Пересчитываем после сохранения':'из '+(report.score?.maxPoints??100)+' баллов'}</small></div></div>
+   <div className="report-section-toolbar"><div className="tabs">{blocks.map((label,index)=><button key={label} className={'tab'+(activeBlock===index?' active':'')} onClick={()=>setActiveBlock(index)}>{label}</button>)}</div><div className={'report-rating'+(report.score?.rating==null?'':report.score.rating>=ratingThresholds.green?' metric-zone-green':report.score.rating<=ratingThresholds.red?' metric-zone-red':' metric-zone-yellow')}><span>Рейтинг</span><strong>{dirty&&!negativeError?'…':report.score?.rating??'—'}</strong><small>{negativeError?'Последний сохранённый рейтинг':dirty?'Пересчитываем после сохранения':'из '+(report.score?.maxPoints??100)+' баллов'}</small></div></div>
    {activeBlock===1&&<section className="card labor-overview" aria-label="Выручка и напитки"><div className="labor-overview-header"><div><h2 className="card-title">Выручка и напитки</h2><p>Факт за выбранный период и план на следующий месяц.</p></div><div className="labor-previous"><span>Предыдущий факт</span><strong>{previous?.revenue??'—'} ₽</strong><strong>{previous?.drinksCount??'—'} напитков</strong></div></div><div className="labor-overview-grid"><label><span>Выручка, ₽</span>{input('Выручка',report.revenue,v=>change(r=>({...r,revenue:v})))}</label><label><span>План выручки</span>{input('План выручки',report.formData?.revenuePlan,v=>field('revenuePlan',v))}</label><label><span>Количество напитков</span>{input('Количество напитков',report.drinksCount,v=>change(r=>({...r,drinksCount:v})))}</label><label><span>План напитков</span>{input('План напитков',report.formData?.drinksPlan,v=>field('drinksPlan',v))}</label></div></section>}
    {activeBlock!==4&&<div className="card table-wrap"><table className="table"><thead><tr><th>Показатель</th><th>Предыдущий факт</th><th>Текущий факт</th><th>План следующего месяца</th></tr></thead><tbody>
     {visibleMetrics.filter(m=>(['FREE_ACCESS','DEPOSIT'].includes(m.code)?0:blockFor(m.section||m.code))===activeBlock).sort((a,b)=>a.displayOrder-b.displayOrder).map(m=>{

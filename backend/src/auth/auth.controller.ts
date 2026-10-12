@@ -112,7 +112,7 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@Res() res: Response) {
+  async logout(@Res({ passthrough: true }) res: Response) {
     res.clearCookie('accessToken', sessionCookieOptions());
     return new ApiResponseDto(true, null, 'Logged out successfully');
   }

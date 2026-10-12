@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import Modal from '../../components/Modal';
 import LoadingState from '../../components/LoadingState';
@@ -50,8 +50,12 @@ export default function AdminUsersPage() {
   const [assignmentFrom, setAssignmentFrom] = useState(new Date().toISOString().slice(0,10));
   const [assignmentUntil, setAssignmentUntil] = useState('');
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
     try {
       const [usersRes, citiesRes, shopsRes] = await Promise.all([
         api.get('/admin/users'),
@@ -61,14 +65,16 @@ export default function AdminUsersPage() {
       setUsers(usersRes.data.data || usersRes.data || []);
       setCities(citiesRes.data.data || citiesRes.data || []);
       setShops(shopsRes.data.data || shopsRes.data || []);
+    } catch {
+      setLoadError('Не удалось загрузить пользователей и назначения. Повторите загрузку.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   const openEdit = (u: UserRow) => {
     const currentShop = u.coffeeShopAssignments?.find(a => !a.assignedUntil)?.coffeeShop;
@@ -101,17 +107,25 @@ export default function AdminUsersPage() {
   const cityShops = leaderCityId === '' ? [] : shops.filter(shop => shop.cityId === leaderCityId);
 
   const save = async () => {
-    if (!editing) return;
+    if (!editing || saving) return;
     if (role === 'LEADER' && (leaderCityId === '' || shopIds.length !== 1)) {
       setError('Сначала выберите город, затем кофейню.');
       return;
     }
+    if (role === 'LEADER' && (!assignmentFrom || (assignmentUntil && assignmentUntil < assignmentFrom))) {
+      setError('Укажите дату назначения. Дата снятия не может быть раньше даты назначения.');
+      return;
+    }
+    setSaving(true);
+    setError('');
     try {
       await api.patch('/users/'+editing.id, {role, cityIds: role==='CITY_LEADER'?cityIds:[], coffeeShopIds: role==='LEADER'?shopIds:[], approvedAt:approvedAt||null, assignmentFrom, assignmentUntil});
       setOpen(false);
-      load();
+      await load();
     } catch {
       setError('Не удалось сохранить назначения. Проверьте данные.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -126,7 +140,8 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
-      <div className="card">
+      {loadError && <div className="card"><p className="form-error" role="alert">{loadError}</p><button className="btn btn-ghost" onClick={() => void load()}>Повторить загрузку</button></div>}
+      {!loadError && <div className="card">
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -156,13 +171,13 @@ export default function AdminUsersPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
 
-      <Modal open={open} title={`Пользователь: ${editing?.name}`} onClose={() => setOpen(false)}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <Modal open={open} title={`Пользователь: ${editing?.name}`} onClose={() => { if (!saving) setOpen(false); }}>
+        <fieldset className="user-edit-fields" disabled={saving}>
           <label className="field">
             <span className="field-label">Роль</span>
-            <SelectControl label="Роль" value={role} options={ROLES} onChange={handleRoleChange} />
+            <SelectControl label="Роль" value={role} options={ROLES} disabled={saving} onChange={handleRoleChange} />
           </label>
 
           <label className="field">Дата утверждения в должности<input className="input" type="date" value={approvedAt} onChange={e=>setApprovedAt(e.target.value)}/></label>
@@ -172,6 +187,7 @@ export default function AdminUsersPage() {
               <span className="field-label">Город кофейни</span>
               <SelectControl
                 label="Город кофейни"
+                disabled={saving}
                 value={leaderCityId}
                 options={[{value:'',label:'Выберите город',disabled:true},...cities.map(city=>({value:city.id,label:city.name}))]}
                 onChange={handleLeaderCityChange}
@@ -182,7 +198,7 @@ export default function AdminUsersPage() {
               <SelectControl
                 label="Кофейня"
                 value={shopIds[0] || ''}
-                disabled={leaderCityId === ''}
+                disabled={saving || leaderCityId === ''}
                 options={[{value:'',label:leaderCityId === '' ? 'Сначала выберите город' : 'Выберите кофейню',disabled:true},...cityShops.map(shop=>({value:shop.id,label:shop.name}))]}
                 onChange={(value)=>{setShopIds(value?[Number(value)]:[]);setError('');}}
               />
@@ -193,9 +209,9 @@ export default function AdminUsersPage() {
           {error&&<div className="form-error" role="alert">{error}</div>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <button className="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>Отмена</button>
-            <button className="btn btn-primary btn-sm" onClick={save}>Сохранить</button>
+            <button className="btn btn-primary btn-sm" onClick={save}>{saving ? 'Сохраняем…' : 'Сохранить'}</button>
           </div>
-        </div>
+        </fieldset>
       </Modal>
     </div>
   );

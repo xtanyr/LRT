@@ -1,11 +1,14 @@
-const { PrismaClient, UserRole, MetricDirection, ReportLinkType, AnalysisSection, TriggerCode } = require('@prisma/client');
+const { PrismaClient, UserRole, ReportLinkType } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 const { readUatSeedEnv } = require('./uat-seed-env.cjs');
+const { metrics, triggerConfigs, analysisQuestions, ratingColors } = require('./reference-config.cjs');
+const { assertDemoSeedAllowed } = require('./prepare-user-test.cjs');
 
 const { password } = readUatSeedEnv();
 const prisma = new PrismaClient();
 
 async function main() {
+  await assertDemoSeedAllowed(prisma);
   console.log('Seeding database...');
 
   const passwordHash = await bcrypt.hash(password, 10);
@@ -109,18 +112,7 @@ async function main() {
 
   console.log('Created leader role account without a coffee shop assignment');
 
-  const metrics = [
-    { name: 'eNPS', code: 'ENPS', unit: '%', direction: MetricDirection.HIGHER_IS_BETTER, thresholdStrong: 95, thresholdMedium: 80, pointsStrong: 11.5, pointsMedium: 5.75, displayOrder: 1, section: AnalysisSection.TEAM_GUESTS, source: 'City leader', targetValue: 95, midValue: 80, ptTarget: 11.5, ptMid: 5.75 },
-    { name: 'Скорость разбора отзыва', code: 'REVIEW_SPEED', unit: 'суток', direction: MetricDirection.LOWER_IS_BETTER, thresholdStrong: 2, thresholdMedium: 3, pointsStrong: 11.5, pointsMedium: 5.75, displayOrder: 2, section: AnalysisSection.TEAM_GUESTS, source: 'RocketData', targetValue: 2, midValue: 3, ptTarget: 11.5, ptMid: 5.75 },
-    { name: 'Индекс гостевого опыта', code: 'GUEST_EXP', unit: '%', direction: MetricDirection.HIGHER_IS_BETTER, thresholdStrong: 90, thresholdMedium: 75, pointsStrong: 11.5, pointsMedium: 5.75, displayOrder: 3, section: AnalysisSection.TEAM_GUESTS, source: 'City leader', targetValue: 90, midValue: 75, ptTarget: 11.5, ptMid: 5.75 },
-    { name: 'Рейтинг стандартов', code: 'STANDARDS', unit: '%', direction: MetricDirection.HIGHER_IS_BETTER, thresholdStrong: 90, thresholdMedium: 75, pointsStrong: 11.5, pointsMedium: 5.75, displayOrder: 4, section: AnalysisSection.TEAM_GUESTS, source: 'City leader', targetValue: 90, midValue: 75, ptTarget: 11.5, ptMid: 5.75 },
-    { name: 'Производительность', code: 'PERFORMANCE', unit: 'ед.', direction: MetricDirection.HIGHER_IS_BETTER, thresholdStrong: 11, thresholdMedium: 8.5, pointsStrong: 8.5, pointsMedium: 4.25, displayOrder: 5, section: AnalysisSection.LABOR_COST, source: 'Manual', targetValue: 11, midValue: 8.5, ptTarget: 8.5, ptMid: 4.25 },
-    { name: 'Доля ФОТ в выручке', code: 'LABOR_COST', unit: '%', direction: MetricDirection.LOWER_IS_BETTER, thresholdStrong: 11, thresholdMedium: 16, pointsStrong: 8.5, pointsMedium: 4.25, displayOrder: 6, section: AnalysisSection.LABOR_COST, source: 'Finance', targetValue: 11, midValue: 16, ptTarget: 8.5, ptMid: 4.25 },
-    { name: 'Доля списания десертов', code: 'DESSERT_WRITEOFF', unit: '%', direction: MetricDirection.LOWER_IS_BETTER, thresholdStrong: 0.8, thresholdMedium: 1, pointsStrong: 8.5, pointsMedium: 4.25, displayOrder: 7, section: AnalysisSection.COSTING, source: 'Finance', targetValue: 0.8, midValue: 1, ptTarget: 8.5, ptMid: 4.25 },
-    { name: 'Доля списания продуктов', code: 'PRODUCT_WRITEOFF', unit: '%', direction: MetricDirection.LOWER_IS_BETTER, thresholdStrong: 0.6, thresholdMedium: 1, pointsStrong: 8.5, pointsMedium: 4.25, displayOrder: 8, section: AnalysisSection.COSTING, source: 'Finance', targetValue: 0.6, midValue: 1, ptTarget: 8.5, ptMid: 4.25 },
-    { name: 'Доля депозита в выручке', code: 'FREE_ACCESS', unit: '%', direction: MetricDirection.LOWER_IS_BETTER, thresholdStrong: 1.3, thresholdMedium: 1.5, pointsStrong: 8.5, pointsMedium: 4.25, displayOrder: 9, section: AnalysisSection.COSTING, source: 'Finance', targetValue: 1.3, midValue: 1.5, ptTarget: 8.5, ptMid: 4.25 },
-    { name: 'Рейтинг отзывов за месяц', code: 'REVIEW_RATING', unit: 'балл', direction: MetricDirection.HIGHER_IS_BETTER, thresholdStrong: 4.8, thresholdMedium: 4.6, pointsStrong: 11.5, pointsMedium: 5.75, displayOrder: 10, section: AnalysisSection.TEAM_GUESTS, source: 'RocketData', targetValue: 4.8, midValue: 4.6, ptTarget: 11.5, ptMid: 5.75 },
-  ];
+
 
   for (const metricData of metrics) {
     await prisma.metric.upsert({
@@ -134,15 +126,11 @@ async function main() {
   await prisma.ratingColorConfig.upsert({
     where: { id: 1 },
     update: {},
-    create: { greenThreshold: 80, redThreshold: 60 },
+    create: ratingColors,
   });
   console.log('Created rating color config');
 
-  const triggerConfigs = [
-    { code: TriggerCode.T1, thresholdRating: 60, monthsCount: 3 },
-    { code: TriggerCode.T2, thresholdRating: 80, monthsCount: 12 },
-    { code: TriggerCode.T3, thresholdRating: 0, monthsCount: 3 },
-  ];
+
 
   for (const config of triggerConfigs) {
     await prisma.triggerConfig.upsert({
@@ -153,33 +141,7 @@ async function main() {
   }
   console.log(`Created ${triggerConfigs.length} trigger configs`);
 
-  const analysisQuestions = [
-    { section: AnalysisSection.ENPS, questionKey: 'enps_problems', label: 'Проблемы', displayOrder: 1 },
-    { section: AnalysisSection.ENPS, questionKey: 'enps_reasons', label: 'Причины', displayOrder: 2 },
-    { section: AnalysisSection.ENPS, questionKey: 'enps_plan', label: 'План устранения', displayOrder: 3 },
-    { section: AnalysisSection.REVIEWS, questionKey: 'reviews_root_causes', label: 'Корневые причины', displayOrder: 1 },
-    { section: AnalysisSection.REVIEWS, questionKey: 'reviews_how_fixed', label: 'Как устранили', displayOrder: 2 },
-    { section: AnalysisSection.REVIEWS, questionKey: 'reviews_prevention', label: 'План предотвращения', displayOrder: 3 },
-    { section: AnalysisSection.REVIEWS, questionKey: 'reviews_speed', label: 'Скорость разбора', displayOrder: 4 },
-    { section: AnalysisSection.GUEST_EXPERIENCE, questionKey: 'guest_exp_top_problems', label: 'Топ-3 проблемы', displayOrder: 1 },
-    { section: AnalysisSection.GUEST_EXPERIENCE, questionKey: 'guest_exp_repeated_errors', label: 'Повторяющиеся ошибки', displayOrder: 2 },
-    { section: AnalysisSection.GUEST_EXPERIENCE, questionKey: 'guest_exp_plan', label: 'План устранения', displayOrder: 3 },
-    { section: AnalysisSection.STANDARDS, questionKey: 'standards_top_problems', label: 'Топ-3 проблемы', displayOrder: 1 },
-    { section: AnalysisSection.STANDARDS, questionKey: 'standards_repeated_errors', label: 'Повторяющиеся ошибки', displayOrder: 2 },
-    { section: AnalysisSection.STANDARDS, questionKey: 'standards_plan', label: 'План устранения', displayOrder: 3 },
-    { section: AnalysisSection.GIFTS, questionKey: 'gifts_top_reasons', label: 'Топ-5 причин за месяц', displayOrder: 1 },
-    { section: AnalysisSection.GIFTS, questionKey: 'gifts_actions', label: 'Действия по устранению', displayOrder: 2 },
-    { section: AnalysisSection.GIFTS, questionKey: 'gifts_plan', label: 'План на месяц', displayOrder: 3 },
-    { section: AnalysisSection.LABOR_COST, questionKey: 'labor_lfl_month', label: 'LFL месяц к месяцу по напиткам', displayOrder: 1 },
-    { section: AnalysisSection.LABOR_COST, questionKey: 'labor_lfl_year', label: 'LFL год к году', displayOrder: 2 },
-    { section: AnalysisSection.LABOR_COST, questionKey: 'labor_revenue_reasons', label: 'Причины роста/падения выручки', displayOrder: 3 },
-    { section: AnalysisSection.LABOR_COST, questionKey: 'labor_hypothesis', label: 'Гипотеза на след. месяц', displayOrder: 4 },
-    { section: AnalysisSection.LABOR_COST, questionKey: 'labor_performance', label: 'Разбор производительности + потребность в бариста/часах', displayOrder: 5 },
-    { section: AnalysisSection.LABOR_COST, questionKey: 'labor_certification', label: 'Сертифицированность бариста, дефицит', displayOrder: 6 },
-    { section: AnalysisSection.SUMMARY, questionKey: 'summary_problems', label: '3 главные проблемы месяца', displayOrder: 1 },
-    { section: AnalysisSection.SUMMARY, questionKey: 'summary_reasons', label: '3 главные причины', displayOrder: 2 },
-    { section: AnalysisSection.SUMMARY, questionKey: 'summary_actions', label: '3 действия на следующий месяц', displayOrder: 3 },
-  ];
+
 
   for (const q of analysisQuestions) {
     await prisma.analysisQuestion.upsert({

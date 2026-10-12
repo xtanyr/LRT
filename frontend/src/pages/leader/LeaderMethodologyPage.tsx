@@ -12,26 +12,35 @@ interface Metric {
   direction: string;
   targetValue: number | null;
   midValue: number | null;
-  ptTarget: number;
-  ptMid: number;
+  ptTarget: number | string | null;
+  ptMid: number | string | null;
+  pointsStrong?: number | string;
+  pointsMedium?: number | string;
+  isActive?: boolean;
 }
 
 export default function LeaderMethodologyPage() {
   const { search } = useLocation();
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     const load = async () => {
+      setLoading(true);
+      setError('');
       try {
         const res = await api.get('/metrics');
-        setMetrics(res.data.data || res.data || []);
+        setMetrics((res.data.data || res.data || []).filter((metric: Metric) => metric.isActive !== false));
+      } catch {
+        setError('Не удалось загрузить методику рейтинга. Повторите загрузку.');
       } finally {
         setLoading(false);
       }
     };
-    load();
-  }, []);
+    void load();
+  }, [reload]);
 
   if (loading) return <LoadingState />;
 
@@ -40,6 +49,7 @@ export default function LeaderMethodologyPage() {
     { title: 'Labor Cost', keys: ['LABOR_COST', 'PERFORMANCE'] },
     { title: 'Себестоимость', keys: ['DESSERT_WRITEOFF', 'PRODUCT_WRITEOFF'] },
   ];
+  const maxPoints = metrics.reduce((sum, metric) => sum + Number(metric.pointsStrong ?? metric.ptTarget ?? 0), 0);
 
   return (
     <div className="page">
@@ -51,6 +61,7 @@ export default function LeaderMethodologyPage() {
         <Link className="btn btn-secondary" to={'/report-example'+search}>Пример заполнения отчёта</Link>
       </div>
 
+      {error ? <div className="card"><p className="form-error" role="alert">{error}</p><button className="btn btn-ghost" onClick={() => setReload(value => value + 1)}>Повторить загрузку</button></div> : <>
       <div className="card">
         <div className="card-title">Формула</div>
         <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6, marginBottom: 12 }}>
@@ -62,7 +73,7 @@ export default function LeaderMethodologyPage() {
           <span className="chip chip-danger">Критично — 0 баллов</span>
         </div>
         <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
-          Итоговый балл равен сумме: максимум 100. Пять метрик дают по 11,5 балла, ещё пять — по 8,5. Исторические результаты сохраняются по исходным правилам. Доли затрат считаются как сумма / выручка × 100.
+          Итоговый балл равен сумме баллов активных метрик. Текущий максимум — {maxPoints.toLocaleString('ru-RU')} баллов. Исторические результаты сохраняются по исходным правилам. Доли затрат считаются как сумма / выручка × 100.
         </p>
       </div>
 
@@ -95,8 +106,8 @@ export default function LeaderMethodologyPage() {
                       <td className="muted">{m.direction === 'HIGHER_IS_BETTER' ? '↑' : '↓'}</td>
                       <td className="muted">{m.targetValue ?? '—'}</td>
                       <td className="muted">{m.midValue ?? '—'}</td>
-                      <td className="muted">{m.ptTarget}</td>
-                      <td className="muted">{m.ptMid}</td>
+                      <td className="muted">{m.pointsStrong ?? m.ptTarget ?? '—'}</td>
+                      <td className="muted">{m.pointsMedium ?? m.ptMid ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -105,6 +116,8 @@ export default function LeaderMethodologyPage() {
           </div>
         );
       })}
+      {!metrics.length && <div className="card empty">Активные метрики пока не настроены. Обратитесь к администратору.</div>}
+      </>}
     </div>
   );
 }

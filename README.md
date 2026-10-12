@@ -2,13 +2,15 @@
 
 ## Запуск для сервера
 
-Для stakeholder UAT на Ubuntu используйте краткий порядок в [runbook](docs/uat/deployment-runbook.md): домен и HTTPS, `.env`, Docker Compose, UAT seed и smoke.
+Для чистого пользовательского теста на существующем сервере используйте [краткий гайд](docs/uat/user-test-release.md): обновление, предпросмотр очистки, резервная копия и одноразовая загрузка реальных городов/кофеен.
 
-Перед упаковкой release выполните `deploy/uat/preflight.sh` из WSL/Git Bash и затем `deploy/uat/package-release.ps1`. HTTPS обязателен: production-cookie авторизации имеет флаг `Secure`.
+Проверки сборки и тестов запускаются через `deploy/uat/preflight.sh` из WSL/Git Bash. HTTPS обязателен: production-cookie авторизации имеет флаг `Secure`.
 
 Скрипты резервного копирования и проверки восстановления находятся в `deploy/ubuntu/`; процедура отката описана в [docs/uat/rollback.md](docs/uat/rollback.md).
 
-Контейнер API применяет Prisma-миграции при запуске. Seed доступен только для отдельной UAT-базы и требует явных `ALLOW_UAT_SEED=true` и `UAT_PASSWORD` длиной не менее 12 символов. Не запускайте его для реальных данных.
+Контейнер API применяет Prisma-миграции при запуске и не запускает seed. Реальные города/кофейни загружаются отдельной одноразовой командой. Данные сохраняются в постоянном томе PostgreSQL при обновлении контейнеров.
+
+Старые demo seed-команды предназначены для отдельной синтетической UAT-базы и требуют `ALLOW_UAT_SEED=true` и `UAT_PASSWORD` длиной не менее 12 символов. После чистой подготовки стенда они заблокированы.
 
 Проведение теста описано в [сценарии для стейкхолдеров](docs/uat/stakeholder-test-guide.md), а выпуск и откат — в [rollback guide](docs/uat/rollback.md).
 

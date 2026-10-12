@@ -12,6 +12,18 @@ describe('LeaderReportPage', () => {
   vi.mocked(api.post).mockImplementation(async (_url,body) => ({data:{...(body as object),id:12,score:{rating:0,results:[]}}}) as any);
  });
  afterEach(cleanup);
+ it.each([[85,'green'],[55,'red'],[56,'yellow'],[84,'yellow']])('colors total rating %s using configured thresholds and shared boundaries', async (rating, color) => {
+  vi.mocked(api.get).mockImplementation(async (url) => ({data:
+   url==='/metrics' ? [{id:1,name:'eNPS',code:'ENPS',unit:'%',section:'TEAM_GUESTS',displayOrder:1}] :
+   url==='/coffee-shops' ? [{id:7,name:'Тестовая кофейня'}] :
+   url==='/admin/analysis-questions' ? [] :
+   url==='/admin/rating-color-config' ? {greenThreshold:'85',redThreshold:'55'} :
+   {id:44,coffeeShopId:7,year:2026,month:9,revenue:1000,drinksCount:50,isEditable:true,metricValues:[],analyses:[],score:{rating,results:[]}}
+  }) as any);
+  const {container}=render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+  await screen.findByLabelText('eNPS');
+  await waitFor(()=>expect(container.querySelector('.report-rating')).toHaveClass('metric-zone-'+color));
+ });
  it('saves shop, selected period, comma decimals, plans and optional analysis together', async () => {
   render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
   fireEvent.change(await screen.findByLabelText('eNPS'),{target:{value:'95,5'}});

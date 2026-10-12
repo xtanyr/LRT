@@ -32,9 +32,18 @@ blob-report/
 # Logs, temporary files and database backups
 logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 *.tmp
 *.temp
 *.bak
+*.orig
+*.rej
+*.pid
+*.pid.lock
 *~
 *.swp
 *.swo
@@ -46,11 +55,11 @@ logs/
 *.sqlite-wal
 *.sqlite-shm
 backups/
-/tmp/
-/temp/
-/tmp_inspect_workbooks.py
-/lrt-*.zip
-/lrt-*.zip.sha256
+tmp/
+temp/
+/tmp_inspect_*.py
+lrt-*.zip
+lrt-*.zip.sha256
 
 # Generated design audit reports (premium-ui.json is configuration)
 premium-audit*.json

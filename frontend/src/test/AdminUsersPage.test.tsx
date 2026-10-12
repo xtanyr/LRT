@@ -49,4 +49,23 @@ describe('AdminUsersPage', () => {
       role: 'LEADER', cityIds: [], coffeeShopIds: [22],
     })));
   });
+
+  it('shows a recoverable load error instead of claiming there are no users', async () => {
+    vi.mocked(api.get).mockRejectedValue(new Error('offline'));
+    render(<AdminUsersPage />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось загрузить пользователей');
+    expect(screen.queryByText('Нет пользователей')).not.toBeInTheDocument();
+    vi.mocked(api.get).mockImplementation(async (url) => ({ data: url === '/admin/users' ? [user] : url === '/cities' ? cities : shops }) as any);
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить загрузку' }));
+    expect(await screen.findByRole('button', { name: 'Настроить' })).toBeInTheDocument();
+  });
+
+  it('prevents an assignment ending before it starts without sending a request', async () => {
+    render(<AdminUsersPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Настроить' }));
+    fireEvent.change(screen.getByLabelText('Дата снятия с кофейни'), { target: { value: '2025-12-31' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Дата снятия не может быть раньше даты назначения');
+    expect(api.patch).not.toHaveBeenCalled();
+  });
 });

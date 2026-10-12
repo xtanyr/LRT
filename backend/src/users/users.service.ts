@@ -13,8 +13,8 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findByEmail(email: string) {
-    return this.prisma.user.findUnique({
-      where: { email },
+    return this.prisma.user.findFirst({
+      where: { email: { equals: email.trim().toLowerCase(), mode: 'insensitive' } },
       include: {
         coffeeShopAssignments: { include: { coffeeShop: true } },
         cityAssignments: { include: { city: true } },
@@ -40,7 +40,7 @@ export class UsersService {
     role?: UserRole;
   }) {
     return this.prisma.user.create({
-      data,
+      data: { ...data, email: data.email.trim().toLowerCase() },
       include: {
         coffeeShopAssignments: { include: { coffeeShop: true } },
         cityAssignments: { include: { city: true } },
@@ -51,7 +51,7 @@ export class UsersService {
   async update(id: number, data: Partial<{ name: string; email: string; passwordHash: string; googleOauthId: string; role: UserRole }>) {
     return this.prisma.user.update({
       where: { id },
-      data,
+      data: { ...data, ...(data.email !== undefined ? { email: data.email.trim().toLowerCase() } : {}) },
       include: {
         coffeeShopAssignments: { include: { coffeeShop: true } },
         cityAssignments: { include: { city: true } },

@@ -1,6 +1,7 @@
 const { PrismaClient, UserRole } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 const { readUatSeedEnv } = require('./uat-seed-env.cjs');
+const { assertDemoSeedAllowed } = require('./prepare-user-test.cjs');
 
 const { password: PASSWORD, year: YEAR } = readUatSeedEnv();
 const prisma = new PrismaClient();
@@ -37,6 +38,7 @@ async function ensureShop(name, cityId) {
 }
 
 async function main() {
+  await assertDemoSeedAllowed(prisma);
   const passwordHash = await bcrypt.hash(PASSWORD, 10);
   const metrics = await prisma.metric.findMany({ where: { isActive: true }, orderBy: { displayOrder: 'asc' } });
   if (!metrics.length) throw new Error('Run the base seed before the yearly demo seed.');

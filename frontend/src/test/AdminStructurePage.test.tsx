@@ -20,4 +20,27 @@ describe('AdminStructurePage', () => {
     await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/coffee-shops/9', { isActive: true }));
     expect(await screen.findByText('активна')).toBeInTheDocument();
   });
+
+  it('opens the new coffee shop form even when the city is collapsed', async () => {
+    vi.mocked(api.get).mockResolvedValue({ data: [{ id: 1, name: 'Омск', isActive: true, coffeeShops: [] }] } as any);
+    vi.mocked(api.post).mockResolvedValue({ data: { id: 10, name: 'На Ленина', isActive: true } } as any);
+    render(<ToastProvider><AdminStructurePage /></ToastProvider>);
+    fireEvent.click(await screen.findByRole('button', { name: '+ Кофейня' }));
+    const input = screen.getByRole('textbox', { name: 'Название кофейни' });
+    expect(input).toHaveFocus();
+    fireEvent.change(input, { target: { value: '  На Ленина  ' } });
+    fireEvent.submit(input.closest('form')!);
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/coffee-shops', { name: 'На Ленина', cityId: 1 }));
+    expect(await screen.findByRole('cell', { name: 'На Ленина' })).toBeInTheDocument();
+  });
+
+  it('distinguishes a loading failure from an empty directory and allows retry', async () => {
+    vi.mocked(api.get).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ data: [] } as any);
+    render(<ToastProvider><AdminStructurePage /></ToastProvider>);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось загрузить структуру сети');
+    expect(screen.queryByText(/Пока нет городов/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить загрузку' }));
+    expect(await screen.findByText(/Пока нет городов/)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });

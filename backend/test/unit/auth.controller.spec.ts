@@ -4,6 +4,11 @@ jest.mock('@nestjs/swagger', () => ({
 }));
 
 import { AuthController } from '../../src/auth/auth.controller';
+import { Test } from '@nestjs/testing';
+import { AuthService } from '../../src/auth/auth.service';
+import { JwtAuthGuard } from '../../src/common/guards/jwt-auth.guard';
+import { ConfigService } from '@nestjs/config';
+import request from 'supertest';
 
 describe('AuthController session cookies', () => {
   const user = { id: 3, name: 'User', email: 'user@example.com', role: 'LEADER' };
@@ -53,5 +58,31 @@ describe('AuthController session cookies', () => {
       httpOnly: true,
       sameSite: 'lax',
     }));
+  });
+
+  it('finishes the HTTP logout response and clears the browser cookie', async () => {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [AuthController],
+      providers: [
+        { provide: AuthService, useValue: {} },
+        { provide: ConfigService, useValue: { get: () => undefined } },
+      ],
+    }).overrideGuard(JwtAuthGuard).useValue({ canActivate: () => true }).compile();
+    const app = moduleRef.createNestApplication();
+    app.setGlobalPrefix('api');
+    await app.init();
+    try {
+      const response = await request(app.getHttpServer())
+        .post('/api/auth/logout')
+        .timeout({ response: 500, deadline: 1000 })
+        .expect(200);
+
+      expect(response.body).toEqual({ success: true, data: null, message: 'Logged out successfully' });
+      expect(response.headers['set-cookie']).toEqual(expect.arrayContaining([
+        expect.stringContaining('accessToken=;'),
+      ]));
+    } finally {
+      await app.close();
+    }
   });
 });

@@ -3,13 +3,14 @@
 .select-control-trigger:hover:not(:disabled) { border-color: #cfc5b4; background: var(--surface-2); }
 .select-control-trigger:disabled { color: var(--ink-2); cursor: not-allowed; }
 .select-control-menu, .month-picker-menu { position: absolute; z-index: 50; top: calc(100% + 5px); left: 0; width: 100%; min-width: 190px; max-height: 260px; overflow: auto; padding: 5px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); box-shadow: var(--shadow); }
-.select-control.opens-up .select-control-menu { top: auto; bottom: calc(100% + 5px); }
+.select-control.opens-up .select-control-menu, .month-picker.opens-up .month-picker-menu { top: auto; bottom: calc(100% + 5px); }
 .select-control-menu button { display: block; width: 100%; padding: 8px 9px; border-radius: 6px; color: var(--ink); font-size: 13px; text-align: left; }
 .select-control-menu button:hover, .select-control-menu button[aria-selected="true"] { background: var(--surface-2); }
-.month-picker-menu { width: 250px; padding: 10px; }
+.month-picker-menu { width: min(250px, calc(100vw - 32px)); padding: 10px; }
 .month-picker-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .month-picker-header button { width: 28px; height: 28px; border-radius: 6px; font-size: 20px; }
 .month-picker-header button:hover, .month-picker-grid button:hover { background: var(--surface-2); }
 .month-picker-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 .month-picker-grid button { padding: 7px 3px; border-radius: 6px; text-transform: capitalize; font-size: 12px; }
 .month-picker-grid button.active { background: var(--ink); color: #fff; }
+@media(max-width:640px){.select-control-trigger{font-size:16px}}

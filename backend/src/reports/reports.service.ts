@@ -69,10 +69,12 @@ export class ReportsService {
       if (metric.isActive === false) return [];
       return [{ metricId, absoluteValue: nonNegativeNumberValue(v.absoluteValue, metric.name, true) }];
     });
-    const questions = await this.prisma.analysisQuestion.findMany({ where: { isActive: true } });
-    const analyses = (data.analyses || []).map((a: any) => {
-      if (!a || !questions.some(q => q.questionKey === a.questionKey) || typeof a.content !== 'string' || a.content.length > 20000) throw new BadRequestException('Некорректный ответ анализа');
-      return { questionKey: a.questionKey, content: a.content };
+    const questions = await this.prisma.analysisQuestion.findMany();
+    const analyses = (data.analyses || []).flatMap((a: any) => {
+      const question = questions.find(q => q.questionKey === a?.questionKey);
+      if (!question || typeof a.content !== 'string' || a.content.length > 20000) throw new BadRequestException('Некорректный ответ анализа');
+      if (question.isActive === false) return [];
+      return [{ questionKey: a.questionKey, content: a.content }];
     });
     const formData: Record<string, number | string | null> = {};
     for (const [key, value] of Object.entries(data.formData || {})) {

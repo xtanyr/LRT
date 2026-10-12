@@ -32,7 +32,7 @@ export default function LoginPage() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
       if (response.status === 401) {
         throw new Error('Неверная почта или пароль. Проверьте данные и попробуйте ещё раз.');
@@ -66,7 +66,7 @@ export default function LoginPage() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: email.trim() }),
       });
       if (!response.ok) {
         throw new Error(await readError(response, 'Не удалось отправить ссылку'));
@@ -122,17 +122,17 @@ export default function LoginPage() {
         </div>
 
         {resetToken ? (
-          <form noValidate onSubmit={handleResetPassword} className="login-form">
+          <form onSubmit={handleResetPassword} className="login-form" aria-busy={loading}>
             <label className="field">
               <span className="field-label">Новый пароль</span>
-              <input className="input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={6} required />
+              <input className="input" type="password" autoComplete="new-password" disabled={loading} value={password} onChange={(event) => setPassword(event.target.value)} minLength={6} required />
             </label>
             <label className="field">
               <span className="field-label">Повторите пароль</span>
-              <input className="input" type="password" value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} minLength={6} required />
+              <input className="input" type="password" autoComplete="new-password" disabled={loading} value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} minLength={6} required />
             </label>
-            {error && <div className="error">{error}</div>}
-            {success && <div className="success">{success}</div>}
+            {error && <div className="error" role="alert">{error}</div>}
+            {success && <div className="success" role="status">{success}</div>}
             <button className="btn btn-primary btn-wide" type="submit" disabled={loading}>
               {loading ? 'Сохранение...' : 'Сохранить новый пароль'}
             </button>
@@ -141,35 +141,35 @@ export default function LoginPage() {
             </button>
           </form>
         ) : mode === 'forgot' ? (
-          <form noValidate onSubmit={handleForgotPassword} className="login-form">
+          <form onSubmit={handleForgotPassword} className="login-form" aria-busy={loading}>
             <label className="field">
               <span className="field-label">Электронная почта</span>
-              <input className="input" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@skuratov.ru" required />
+              <input className="input" type="email" autoComplete="username" disabled={loading} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@skuratov.ru" required />
             </label>
-            {error && <div className="error">{error}</div>}
-            {success && <div className="success">{success}</div>}
+            {error && <div className="error" role="alert">{error}</div>}
+            {success && <div className="success" role="status">{success}</div>}
             <button className="btn btn-primary btn-wide" type="submit" disabled={loading}>
               {loading ? 'Отправка...' : 'Отправить ссылку'}
             </button>
-            <button type="button" className="btn btn-ghost btn-wide" onClick={() => setMode('login')}>
+            <button type="button" className="btn btn-ghost btn-wide" disabled={loading} onClick={() => { setMode('login'); setError(''); setSuccess(''); }}>
               Вернуться ко входу
             </button>
           </form>
         ) : (
-          <form noValidate onSubmit={handleLogin} className="login-form">
+          <form onSubmit={handleLogin} className="login-form" aria-busy={loading}>
             <label className="field">
               <span className="field-label">Электронная почта</span>
-              <input className="input" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@skuratov.ru" required />
+              <input className="input" type="email" autoComplete="username" disabled={loading} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@skuratov.ru" required />
             </label>
             <label className="field">
               <span className="field-label">Пароль</span>
-              <input className="input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+              <input className="input" type="password" autoComplete="current-password" disabled={loading} value={password} onChange={(event) => setPassword(event.target.value)} required />
             </label>
             {error && <div className="error" role="alert">{error}</div>}
             <button className="btn btn-primary btn-wide" type="submit" disabled={loading}>
               {loading ? 'Вход...' : 'Войти'}
             </button>
-            <button type="button" className="btn btn-ghost btn-wide" onClick={() => setMode('forgot')}>
+            <button type="button" className="btn btn-ghost btn-wide" disabled={loading} onClick={() => { setMode('forgot'); setError(''); setSuccess(''); }}>
               Забыли пароль?
             </button>
             <div className="login-divider">или</div>

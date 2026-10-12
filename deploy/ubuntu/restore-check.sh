@@ -11,6 +11,6 @@ compose=(docker compose --project-name lrt --env-file "$ENV_FILE" --file "$APP_D
 cleanup() { "${compose[@]}" exec -T db sh -ec 'dropdb -U "$POSTGRES_USER" --if-exists lrt_restore_check' >/dev/null; }
 trap cleanup EXIT
 "${compose[@]}" exec -T db sh -ec 'createdb -U "$POSTGRES_USER" lrt_restore_check'
-"${compose[@]}" exec -T db sh -ec 'pg_restore -U "$POSTGRES_USER" -d lrt_restore_check --no-owner' < "$dump"
-"${compose[@]}" exec -T db sh -ec 'users=$(psql -U "$POSTGRES_USER" -d lrt_restore_check -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM users"); reports=$(psql -U "$POSTGRES_USER" -d lrt_restore_check -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM monthly_reports"); printf "Restored database: users=%s reports=%s\n" "$users" "$reports"; test "$users" -gt 0 && test "$reports" -gt 0'
+"${compose[@]}" exec -T db sh -ec 'pg_restore -U "$POSTGRES_USER" -d lrt_restore_check --no-owner --exit-on-error' < "$dump"
+"${compose[@]}" exec -T db sh -ec 'users=$(psql -U "$POSTGRES_USER" -d lrt_restore_check -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM users"); reports=$(psql -U "$POSTGRES_USER" -d lrt_restore_check -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM monthly_reports"); printf "Restored database: users=%s reports=%s\n" "$users" "$reports"; test "$users" -gt 0'
 echo "Restore check passed: $dump"

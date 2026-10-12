@@ -21,6 +21,7 @@ describe('AuthService', () => {
       create: jest.fn(),
       update: jest.fn(),
       hashPassword: jest.fn().mockResolvedValue('hashed-password'),
+      validatePassword: jest.fn().mockResolvedValue(true),
       completePasswordReset: jest.fn().mockResolvedValue(true),
       createPasswordResetToken: jest.fn().mockResolvedValue('raw-reset-token'),
       ...overrides,
@@ -53,6 +54,18 @@ describe('AuthService', () => {
       coffeeShopAssignments: [],
       cityAssignments: [],
     });
+  });
+
+  it.each([
+    [null, 'password123'],
+    ['user@example.com', { value: 'password123' }],
+    ['user@example.com', 123456],
+  ])('rejects malformed login fields without querying credentials', async (email, password) => {
+    const { service, users } = createService({ findByEmail: jest.fn().mockResolvedValue(user) });
+
+    await expect(service.validateUser(email as any, password as any)).resolves.toBeNull();
+    expect(users.findByEmail).not.toHaveBeenCalled();
+    expect(users.validatePassword).not.toHaveBeenCalled();
   });
 
   it('always creates public registrations as leaders', async () => {
