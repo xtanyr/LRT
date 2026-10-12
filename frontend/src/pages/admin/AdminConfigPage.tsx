@@ -91,7 +91,6 @@ export default function AdminConfigPage() {
       await api.patch('/admin/rating-color-config', ratingConfig);
       toast.show('Сохранено', 'success');
     } catch {
-      // silent
     }
   };
 
@@ -163,14 +162,14 @@ export default function AdminConfigPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontWeight: 500 }}>RocketData</div>
-                <div style={{ fontSize: 12, color: 'var(--ink-2)' }}>Скорость разбора отзыва · v2</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-2)' }}>Скорость разбора отзыва</div>
               </div>
               <span className="chip chip-ghost">не подключено</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontWeight: 500 }}>Финансовый дашборд</div>
-                <div style={{ fontSize: 12, color: 'var(--ink-2)' }}>Выручка, ФОТ, списания, аренда, расходы · v2</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-2)' }}>Выручка, ФОТ, списания, аренда, расходы</div>
               </div>
               <span className="chip chip-ghost">не подключено</span>
             </div>

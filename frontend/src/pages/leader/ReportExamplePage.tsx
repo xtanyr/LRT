@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { SelectControl } from '../../components/SelectControl';
 import { useReportExampleHelp } from '../../services/report-example-help';
-import { REPORT_EXAMPLE_SOURCE, REPORT_EXAMPLE_STEPS, type ExampleRow } from './report-example';
+import { REPORT_EXAMPLE_STEPS, type ExampleRow } from './report-example';
 import '../../styles/pages.css';
 import './ReportExamplePage.css';
 
@@ -10,11 +10,11 @@ function ExampleValues({ rows }: { rows: ExampleRow[] }) {
   return <div className="example-values">
     <div className="example-columns" aria-hidden="true"><span>Показатель</span><span>Март · факт</span><span>Апрель · факт</span><span>Май · план</span></div>
     {rows.map(row => <div className="example-row" key={row.label} role="group" aria-label={row.label}>
-      <div className="example-row-label"><strong>{row.label}</strong>{row.illustrative && <small className="example-illustrative">Учебное значение</small>}</div>
+      <div className="example-row-label"><strong>{row.label}</strong></div>
       <dl className="example-row-values">
         <div><dt>Март · факт</dt><dd>{row.previous}</dd></div>
         <div className="example-current-value"><dt>Апрель · факт</dt><dd>{row.current}</dd></div>
-        <div><dt>Май · план</dt><dd>{row.plan}</dd>{row.planIllustrative && <small className="example-plan-note">Учебный план</small>}</div>
+        <div><dt>Май · план</dt><dd>{row.plan}</dd></div>
       </dl>
       {row.note && <p className="example-row-note">{row.note}</p>}
     </div>)}
@@ -57,8 +57,7 @@ export default function ReportExamplePage() {
 
     <div className="example-intro">
       <p>Выберите нужный шаг в списке или проходите пример кнопками «Назад» и «Следующий шаг».</p>
-      <p>Основа — ваш заполненный отчёт. Недостающие суммы, количество напитков и часть планов добавлены для обучения. Это пример: данные вашего отчёта здесь не меняются.</p>
-      <a href={REPORT_EXAMPLE_SOURCE} target="_blank" rel="noopener noreferrer">Исходный пример в Google Таблицах ↗</a>
+      <p>Это учебный отчёт. Для своего отчёта используйте фактические данные.</p>
     </div>
 
       <article className="example-report" aria-label="Учебный отчёт за апрель">

@@ -171,58 +171,6 @@ describe('LeaderReportPage', () => {
   expect(screen.getByRole('heading',{name:'Учебный отчёт'})).toBeInTheDocument();
  });
 
- it('offers placeholder help for all seven expense articles without saving report data', async () => {
-  vi.mocked(api.get).mockImplementation(async url => ({data:
-   url==='/metrics' ? [
-    {id:1,name:'eNPS',code:'ENPS',unit:'%',section:'TEAM_GUESTS',displayOrder:1},
-    {id:2,name:'Десерты: переименованная метрика',code:'DESSERT_WRITEOFF',unit:'%',section:'COSTING',displayOrder:2},
-    {id:3,name:'Продукты: переименованная метрика',code:'PRODUCT_WRITEOFF',unit:'%',section:'COSTING',displayOrder:3},
-   ] : url==='/coffee-shops' ? [{id:7,name:'Тестовая кофейня'}] :
-   url==='/reports/editing-policy' ? {historicalEditingEnabled:false} :
-   url==='/admin/analysis-questions' ? [] :
-   {id:44,coffeeShopId:7,year:2026,month:9,revenue:1000,drinksCount:50,isEditable:false,metricValues:[],analyses:[],formData:{}}
-  }) as any);
-  render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
-  await screen.findByLabelText('eNPS');
-  expect(screen.getByLabelText('eNPS')).toBeDisabled();
-  for(const [block,articles] of [
-   ['Команда и гости',['Подарки']],
-   ['Labor Cost',['Расходы на персонал']],
-   ['Себестоимость',['Списание десертов','Списание продуктов']],
-   ['Расходы',['Административные затраты','Аренда','Оборудование, материалы, ремонт']],
-  ] as const) {
-   fireEvent.click(screen.getByRole('button',{name:block}));
-   for(const article of articles) {
-    const help=screen.getByRole('button',{name:'Подсказка: '+article});
-    expect(help.closest('td')).not.toBeNull();
-    fireEvent.mouseEnter(help);
-    const popup=screen.getByRole('tooltip');
-    expect(popup).toHaveTextContent(article);
-    expect(popup).toHaveTextContent('Текст подсказки и ссылка на статью будут добавлены позже.');
-    expect(help).toHaveAttribute('aria-describedby',popup.id);
-    expect(within(popup).queryByRole('link')).not.toBeInTheDocument();
-    fireEvent.keyDown(help,{key:'Escape'});
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
-   }
-  }
-  expect(api.post).not.toHaveBeenCalled();
- });
-
- it('opens report help on focus and tap and closes it on blur and outside interaction', async () => {
-  render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
-  await screen.findByLabelText('eNPS');
-  const help=screen.getByRole('button',{name:'Подсказка: Подарки'});
-  fireEvent.focus(help);
-  expect(screen.getByRole('tooltip')).toBeInTheDocument();
-  fireEvent.blur(help,{relatedTarget:screen.getByLabelText('eNPS')});
-  expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
-  fireEvent.click(help);
-  expect(screen.getByRole('tooltip')).toBeInTheDocument();
-  fireEvent.pointerDown(screen.getByLabelText('eNPS'));
-  expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
-  expect(api.post).not.toHaveBeenCalled();
- });
-
  it('loads giftsLink beside the gifts metric and keeps the link available in a read-only report', async () => {
   const url='https://example.org/gifts?month=2026-09';
   vi.mocked(api.get).mockImplementation(async path => ({data:

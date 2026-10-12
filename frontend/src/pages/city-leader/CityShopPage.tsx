@@ -292,7 +292,6 @@ export default function CityShopPage() {
               const res = await api.get(`/comments/coffee-shop/${shop.id}`);
               setComments(res.data.data || res.data || []);
             } catch {
-              // silent
             }
           }}>
             Отправить

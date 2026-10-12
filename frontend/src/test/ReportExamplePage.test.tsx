@@ -23,7 +23,6 @@ describe('Report example walkthrough', () => {
     const revenue = screen.getByRole('region', { name: 'Выручка и напитки' });
     expect(revenue).toHaveTextContent('5 460 082');
     expect(revenue).toHaveTextContent('12 000');
-    expect(revenue).toHaveTextContent('Учебное значение');
     expect(screen.queryByRole('region', { name: 'Выберите кофейню и период' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'eNPS' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('region')).toHaveLength(1);
@@ -52,7 +51,7 @@ describe('Report example walkthrough', () => {
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
   });
 
-  it('shows source values and converts review hours to the actual form unit', () => {
+  it('shows example values and converts review hours to the actual form unit', () => {
     renderExample();
     for (let step = 0; step < 2; step++) fireEvent.click(screen.getByRole('button', { name: 'Следующий шаг' }));
     const team = screen.getByRole('region', { name: 'eNPS' });

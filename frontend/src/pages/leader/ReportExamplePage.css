@@ -4,7 +4,6 @@
 .example-eyebrow { margin-bottom: 6px; }
 .example-intro { max-width: 80ch; margin-bottom: 22px; font-size: 13px; line-height: 1.65; }
 .example-intro p + p { margin-top: 5px; color: var(--ink-2); }
-.example-intro a { display: inline-block; margin-top: 8px; text-decoration: underline; text-underline-offset: 3px; }
 .example-report { min-width: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: visible; }
 .example-report-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 5px 16px; padding: 16px 20px; background: var(--surface-2); border-bottom: 1px solid var(--line); border-radius: var(--radius) var(--radius) 0 0; font-size: 14px; }
 .example-report-heading span { font-size: 11px; color: var(--ink-2); }
@@ -31,12 +30,10 @@
 .example-row:last-child { border-bottom: 0; }
 .example-row-label { padding-inline-end: 8px; min-width: 0; font-size: 12px; }
 .example-row-label strong { font-weight: 500; }
-.example-illustrative { display: block; color: var(--warning); font-size: 10px; margin-top: 4px; }
 .example-row-values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); min-width: 0; }
 .example-row-values > div { padding: 5px 8px; min-width: 0; }
 .example-row-values dt { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; clip-path: inset(50%); overflow: hidden; }
 .example-row-values dd { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.example-plan-note { display: block; color: var(--warning); font-size: 10px; margin-top: 4px; line-height: 1.4; }
 .example-current-value { background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; font-weight: 600; }
 .example-row-note { grid-column: 1 / -1; margin-top: 9px; font-size: 11px; color: var(--ink-2); line-height: 1.6; }
 .example-checklist { padding-inline-start: 20px; font-size: 13px; line-height: 1.7; }
@@ -72,7 +69,6 @@
   .example-columns { display: none; }
   .example-row { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .example-row-label { font-size: 13px; }
-  .example-illustrative { display: inline-block; margin: 0 0 0 8px; }
   .example-row-values > div { padding: 8px 6px; }
   .example-row-values dt { position: static; width: auto; height: auto; margin: 0 0 4px; clip-path: none; overflow: visible; font-family: var(--font-sans); font-size: 10px; color: var(--ink-2); }
   .example-row-values dd { font-size: 12px; }
