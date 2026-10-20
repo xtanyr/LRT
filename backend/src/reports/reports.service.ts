@@ -5,6 +5,7 @@ import { AccessService, Actor } from '../common/access.service';
 import { reportPeriodState } from '../common/report-period';
 import { nonNegativeNumberValue, numberValue, positiveId } from '../common/validation';
 import { calculateScore } from '../scoring/rating-calculator';
+import { metricCodesForAnalysisQuestion } from '../common/analysis-metric-links';
 
 const includeReport = {
   coffeeShop: { include: { city: true } },
@@ -128,6 +129,18 @@ export class ReportsService {
       if (Number(report.revenue) <= 0 || !report.drinksCount || metrics.some(m => !report.metricValues.some(v => v.metricId === m.id && v.absoluteValue !== null))) throw new BadRequestException('Заполните выручку, напитки и все метрики');
       const snapshot = calculateScore(metrics, report);
       if (snapshot.results.some(r => r.zone === null)) throw new BadRequestException('Не все метрики можно рассчитать');
+      const questions = await tx.analysisQuestion.findMany({ where: { isActive: true } });
+      const missingAnalyses = questions.filter(question => {
+        const linkedCodes = metricCodesForAnalysisQuestion(question);
+        if (!linkedCodes.length) return false;
+        const needsAnalysis = snapshot.results.some(result => linkedCodes.includes(result.code) && (result.zone === 'BELOW_TARGET' || result.zone === 'CRITICAL'));
+        if (!needsAnalysis) return false;
+        const answer = report.analyses.find(analysis => analysis.questionKey === question.questionKey);
+        return !answer || (answer.content?.trim().length ?? 0) < 3;
+      });
+      if (missingAnalyses.length) {
+        throw new BadRequestException(`Заполните обязательный анализ (не менее 3 символов): ${missingAnalyses.map(question => question.label).join(', ')}`);
+      }
       const submittedAt = new Date();
       const saved = await tx.monthlyReport.update({ where: { id }, data: { status: 'SUBMITTED', submittedAt, submittedById: report.submittedById || user.id, ratingSnapshot: snapshot as any }, include: includeReport });
       if (report.status !== 'SUBMITTED') await tx.reportEditLog.create({ data: { reportId: id, editedById: user.id!, fieldChanged: 'status', oldValue: report.status, newValue: 'SUBMITTED' } });

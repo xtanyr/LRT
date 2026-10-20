@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import ToastProvider from '../components/ToastProvider';
 import LeaderReportPage from '../pages/leader/LeaderReportPage';
@@ -24,6 +24,69 @@ describe('LeaderReportPage', () => {
   await screen.findByLabelText('eNPS');
   await waitFor(()=>expect(container.querySelector('.report-rating')).toHaveClass('metric-zone-'+color));
  });
+ it.each([
+  ['TARGET',false],
+  ['BELOW_TARGET',true],
+  ['CRITICAL',true],
+ ])('marks linked analysis as required only in non-green zone %s', async (zone, required) => {
+  vi.mocked(api.get).mockImplementation(async url => ({data:
+   url==='/metrics' ? [{id:1,name:'eNPS',code:'ENPS',unit:'%',section:'TEAM_GUESTS',displayOrder:1}] :
+   url==='/coffee-shops' ? [{id:7,name:'Тестовая кофейня'}] :
+   url==='/admin/analysis-questions' ? [{questionKey:'enps_problems',label:'Проблемы eNPS',section:'ENPS',displayOrder:1,metricCodes:['ENPS']}] :
+   {id:44,coffeeShopId:7,year:2026,month:9,revenue:1000,drinksCount:50,isEditable:true,metricValues:[{metricId:1,absoluteValue:90}],analyses:[],formData:{},score:{rating:10,results:[{metricId:1,zone,pointsAwarded:0}]}}
+  }) as any);
+  render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+  await screen.findByLabelText('eNPS');
+  fireEvent.click(screen.getByRole('button',{name:/eNPS/}));
+
+  const analysis=await screen.findByRole('textbox',{name:/Проблемы eNPS/});
+  expect(analysis).toHaveAttribute('aria-required',String(required));
+  expect(screen.getByText(required?'Обязательно':'Необязательно')).toBeInTheDocument();
+  if(required) expect(screen.getByText('Показатель: eNPS. Опишите причины и действия.')).toBeInTheDocument();
+ });
+
+ it('saves current values and blocks submission with a missing required analysis', async () => {
+  const report={id:44,coffeeShopId:7,year:2026,month:9,revenue:1000,drinksCount:50,isEditable:true,
+   metricValues:[{metricId:1,absoluteValue:70}],analyses:[],formData:{},
+   score:{rating:0,results:[{metricId:1,zone:'CRITICAL',pointsAwarded:0}]}};
+  vi.mocked(api.get).mockImplementation(async url => ({data:
+   url==='/metrics' ? [{id:1,name:'eNPS',code:'ENPS',unit:'%',section:'TEAM_GUESTS',displayOrder:1}] :
+   url==='/coffee-shops' ? [{id:7,name:'Тестовая кофейня'}] :
+   url==='/admin/analysis-questions' ? [{questionKey:'enps_problems',label:'Проблемы eNPS',section:'ENPS',displayOrder:1,metricCodes:['ENPS']}] : report
+  }) as any);
+  vi.mocked(api.post).mockImplementation(async (url,body) => ({data:
+   url==='/reports/draft' ? {...report,...(body as object)} : {...report,status:'SUBMITTED'}
+  }) as any);
+  render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+  await screen.findByLabelText('eNPS');
+
+  fireEvent.click(screen.getByRole('button',{name:'Отправить отчёт'}));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(/обязательн.*анализ/i);
+  expect(api.post).toHaveBeenCalledWith('/reports/draft',expect.objectContaining({metricValues:[{metricId:1,absoluteValue:70}]}));
+  expect(api.post).not.toHaveBeenCalledWith('/reports/44/submit');
+  expect(await screen.findByRole('textbox',{name:/Проблемы eNPS/})).toHaveAttribute('aria-invalid','true');
+ });
+
+ it('allows submission with empty linked analysis when the metric is green', async () => {
+  const report={id:44,coffeeShopId:7,year:2026,month:9,revenue:1000,drinksCount:50,isEditable:true,
+   metricValues:[{metricId:1,absoluteValue:95}],analyses:[],formData:{},
+   score:{rating:11.5,results:[{metricId:1,zone:'TARGET',pointsAwarded:11.5}]}};
+  vi.mocked(api.get).mockImplementation(async url => ({data:
+   url==='/metrics' ? [{id:1,name:'eNPS',code:'ENPS',unit:'%',section:'TEAM_GUESTS',displayOrder:1}] :
+   url==='/coffee-shops' ? [{id:7,name:'Тестовая кофейня'}] :
+   url==='/admin/analysis-questions' ? [{questionKey:'enps_problems',label:'Проблемы eNPS',section:'ENPS',displayOrder:1,metricCodes:['ENPS']}] : report
+  }) as any);
+  vi.mocked(api.post).mockImplementation(async url => ({data:url==='/reports/draft'?report:{...report,status:'SUBMITTED'}}) as any);
+  render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+  await screen.findByLabelText('eNPS');
+
+  fireEvent.click(screen.getByRole('button',{name:'Отправить отчёт'}));
+
+  await waitFor(()=>expect(api.post).toHaveBeenCalledWith('/reports/44/submit'));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+ });
+
  it('saves shop, selected period, comma decimals, plans and optional analysis together', async () => {
   render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
   fireEvent.change(await screen.findByLabelText('eNPS'),{target:{value:'95,5'}});
@@ -57,6 +120,175 @@ describe('LeaderReportPage', () => {
   fireEvent.change(await screen.findByLabelText('eNPS'),{target:{value:'95'}});
   await new Promise(resolve=>setTimeout(resolve,2100));
   expect(api.post).toHaveBeenCalledWith('/reports/draft',expect.objectContaining({metricValues:[{metricId:1,absoluteValue:'95'}]}));
+ });
+ it('keeps analysis text focused and editable while an autosave is in flight', async () => {
+  const defaultGet=vi.mocked(api.get).getMockImplementation()!;
+  let reportRequest=0;
+  vi.mocked(api.get).mockImplementation(async url=>{
+   if(url.startsWith('/reports/coffee-shop/'))return {data:reportRequest++===0?{id:44,coffeeShopId:7,year:2026,month:9,revenue:1000,drinksCount:50,isEditable:true,metricValues:[],analyses:[{questionKey:'enps_problem',content:'Сохранённый текст для проверки'}],formData:{}}:null} as any;
+   return defaultGet(url) as any;
+  });
+  const finishSaves:(()=>void)[]=[];
+  vi.mocked(api.post).mockImplementation((_url,body)=>new Promise(resolve=>{
+   finishSaves.push(()=>resolve({data:{...(body as object),id:44,isEditable:true,score:{rating:0,results:[]}}} as any));
+  }) as any);
+  render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button',{name:/eNPS/}));
+  const analysis=await screen.findByRole('textbox',{name:/Проблемы eNPS/}) as HTMLTextAreaElement;
+  fireEvent.change(analysis,{target:{value:'Обновлённый текст для проверки'} });
+  analysis.focus();
+  analysis.setSelectionRange(7,7);
+
+  try {
+   await waitFor(()=>expect(api.post).toHaveBeenCalledWith('/reports/draft',expect.objectContaining({analyses:[{questionKey:'enps_problem',content:'Обновлённый текст для проверки'}]})),{timeout:2500});
+   expect(analysis).toBeEnabled();
+   expect(analysis).toHaveFocus();
+   expect(analysis.selectionStart).toBe(7);
+   fireEvent.change(analysis,{target:{value:'Новое изменение во время сохранения'} });
+   expect(analysis).toHaveValue('Новое изменение во время сохранения');
+   await act(async()=>{finishSaves[0]();});
+   await waitFor(()=>expect(api.post).toHaveBeenCalledTimes(2),{timeout:3000});
+   expect(api.post).toHaveBeenLastCalledWith('/reports/draft',expect.objectContaining({analyses:[{questionKey:'enps_problem',content:'Новое изменение во время сохранения'}]}));
+   await act(async()=>{finishSaves[1]();});
+   await waitFor(()=>expect(screen.getByRole('status')).toHaveTextContent('Все изменения сохранены'));
+  } finally {
+   await act(async()=>{finishSaves.forEach(finish=>finish());});
+  }
+ });
+ it('flushes pending edits when leaving the report before the autosave delay expires', async () => {
+  const {unmount}=render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+  fireEvent.change(await screen.findByLabelText('eNPS'),{target:{value:'95'}});
+  fireEvent.click(screen.getByRole('button',{name:/eNPS/}));
+  fireEvent.change(screen.getByLabelText(/Проблемы eNPS/),{target:{value:'Причины и действия'}});
+  unmount();
+  expect(api.post).toHaveBeenCalledWith('/reports/draft',expect.objectContaining({
+   metricValues:[{metricId:1,absoluteValue:'95'}],
+   analyses:[{questionKey:'enps_problem',content:'Причины и действия'}],
+  }));
+ });
+ it('waits for an exit save before reloading that report', async () => {
+  let storedReport:any=null;
+  let finishSave:(()=>void)|undefined;
+  const defaultGet=vi.mocked(api.get).getMockImplementation()!;
+  vi.mocked(api.get).mockImplementation(async url=>{
+   if(url==='/reports/coffee-shop/7/2026/9')return {data:storedReport} as any;
+   if(url==='/reports/coffee-shop/7/2026/8')return {data:null} as any;
+   return defaultGet(url) as any;
+  });
+  vi.mocked(api.post).mockImplementation((_url,body)=>new Promise(resolve=>{
+   finishSave=()=>{
+    storedReport={...(body as object),id:44,isEditable:true,score:{rating:0,results:[]}};
+    resolve({data:storedReport} as any);
+   };
+  }) as any);
+  const renderReport=()=>render(<MemoryRouter initialEntries={['/report?period=2026-09']}><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+  const first=renderReport();
+  fireEvent.change(await screen.findByLabelText('eNPS'),{target:{value:'95'}});
+  first.unmount();
+  expect(api.post).toHaveBeenCalledWith('/reports/draft',expect.objectContaining({metricValues:[{metricId:1,absoluteValue:'95'}]}));
+
+  renderReport();
+  await waitFor(()=>expect(vi.mocked(api.get).mock.calls.filter(([url])=>url==='/coffee-shops')).toHaveLength(2));
+  expect(vi.mocked(api.get).mock.calls.filter(([url])=>url==='/reports/coffee-shop/7/2026/9')).toHaveLength(1);
+  finishSave?.();
+  await waitFor(()=>expect(screen.getByLabelText('eNPS')).toHaveValue('95'));
+ });
+ it('shows one gifts action-and-plan field and separate analysis fields for each expense article', async () => {
+  const questions = [
+   {questionKey:'gifts_top_reasons',label:'Топ-5 причин за месяц',section:'GIFTS',displayOrder:1},
+   {questionKey:'gifts_actions_plan',label:'Действия по устранению и план на месяц',section:'GIFTS',displayOrder:2},
+   {questionKey:'dessert_writeoff_analysis',label:'Списания десертов: причины и план',section:'DESSERT_WRITEOFF',displayOrder:1},
+   {questionKey:'product_writeoff_analysis',label:'Списания продуктов: причины и план',section:'PRODUCT_WRITEOFF',displayOrder:1},
+   {questionKey:'free_access_analysis',label:'Свободный доступ: расходы и план',section:'FREE_ACCESS',displayOrder:1},
+   {questionKey:'admin_costs_analysis',label:'Административные затраты: причины и план',section:'ADMIN_COSTS',displayOrder:1},
+   {questionKey:'rent_analysis',label:'Аренда: причины и план',section:'RENT',displayOrder:1},
+   {questionKey:'equipment_analysis',label:'Оборудование: анализ и план',section:'EQUIPMENT',displayOrder:1},
+   {questionKey:'materials_analysis',label:'Материалы: анализ и план',section:'EQUIPMENT',displayOrder:2},
+   {questionKey:'repair_analysis',label:'Ремонт: анализ и план',section:'EQUIPMENT',displayOrder:3},
+  ];
+  vi.mocked(api.get).mockImplementation(async url => ({data:
+   url==='/metrics' ? [{id:1,name:'eNPS',code:'ENPS',unit:'%',section:'TEAM_GUESTS',displayOrder:1}] :
+   url==='/coffee-shops' ? [{id:7,name:'Тестовая кофейня'}] :
+   url==='/admin/analysis-questions' ? questions :
+   {id:44,coffeeShopId:7,year:2026,month:9,revenue:1000,drinksCount:50,isEditable:true,metricValues:[],analyses:[],formData:{}}
+  }) as any);
+  render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+
+  await screen.findByLabelText('eNPS');
+  fireEvent.click(screen.getByRole('button',{name:/Подарки/}));
+  expect(screen.getByRole('textbox',{name:/Топ-5 причин за месяц/})).toBeInTheDocument();
+  expect(screen.getByRole('textbox',{name:/Действия по устранению и план на месяц/})).toBeInTheDocument();
+  expect(screen.queryByLabelText('Действия по устранению')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('План на месяц')).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button',{name:'Себестоимость'}));
+  for (const [section,label] of [
+   ['Списание десертов','Списания десертов: причины и план'],
+   ['Списание продуктов','Списания продуктов: причины и план'],
+   ['Свободный доступ','Свободный доступ: расходы и план'],
+  ]) {
+   fireEvent.click(screen.getByRole('button',{name:new RegExp(section)}));
+   expect(screen.getByRole('textbox',{name:new RegExp(label)})).toBeInTheDocument();
+  }
+
+  fireEvent.click(screen.getByRole('button',{name:'Расходы'}));
+  for (const [section,label] of [
+   ['Административные затраты','Административные затраты: причины и план'],
+   ['Аренда','Аренда: причины и план'],
+   ['Оборудование, материалы и ремонт','Оборудование: анализ и план'],
+  ]) {
+   fireEvent.click(screen.getByRole('button',{name:new RegExp(section)}));
+   expect(screen.getByRole('textbox',{name:new RegExp(label)})).toBeInTheDocument();
+  }
+  expect(screen.getByRole('textbox',{name:/Материалы: анализ и план/})).toBeInTheDocument();
+  expect(screen.getByRole('textbox',{name:/Ремонт: анализ и план/})).toBeInTheDocument();
+ });
+ it.each(['Омск','Новосибирск'])('shows ruble inventory amounts with revenue shares and analysis for %s shops', async cityName => {
+  const questions=[{questionKey:'inventory_analysis',label:'Анализ инвентаризации',section:'COSTING',displayOrder:1}];
+  vi.mocked(api.get).mockImplementation(async url => ({data:
+   url==='/metrics' ? [{id:1,name:'eNPS',code:'ENPS',unit:'%',section:'TEAM_GUESTS',displayOrder:1}] :
+   url==='/coffee-shops' ? [{id:7,name:'Тестовая кофейня',city:{id:1,name:cityName}}] :
+   url==='/admin/analysis-questions' ? questions :
+   {id:44,coffeeShopId:7,year:2026,month:9,revenue:5000000,drinksCount:50,isEditable:true,metricValues:[],analyses:[],formData:{}}
+  }) as any);
+  render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+  await screen.findByLabelText('eNPS');
+  fireEvent.click(screen.getByRole('button',{name:'Себестоимость'}));
+
+  expect(screen.getByRole('note')).toHaveTextContent('Инвентаризация пока доступна только для кофеен Омска и Новосибирска.');
+  const surplus=screen.getByLabelText('Сумма излишков, ₽');
+  const shortage=screen.getByLabelText('Сумма недостач, ₽');
+  expect(surplus).toBeInTheDocument();
+  expect(shortage).toBeInTheDocument();
+  expect(screen.getAllByText('—', {selector:'.inventory-share-value'})).toHaveLength(2);
+
+  fireEvent.change(surplus,{target:{value:'15000'}});
+  fireEvent.change(shortage,{target:{value:'7500'}});
+  expect(screen.getByText('0,3%',{selector:'.inventory-share-value'})).toBeInTheDocument();
+  expect(screen.getByText('0,15%',{selector:'.inventory-share-value'})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:/Себестоимость.*Причины отклонений/}));
+  const analysis=screen.getByRole('textbox',{name:/Анализ инвентаризации/});
+  fireEvent.change(analysis,{target:{value:'Проверить расхождения по молоку и десертам'}});
+
+  await waitFor(()=>expect(api.post).toHaveBeenCalledWith('/reports/draft',expect.objectContaining({
+   formData:expect.objectContaining({inventorySurplus:'15000',inventoryShortage:'7500'}),
+   analyses:[{questionKey:'inventory_analysis',content:'Проверить расхождения по молоку и десертам'}],
+  })),{timeout:2500});
+ });
+ it('shows the inventory scope warning and hides inventory fields outside Omsk and Novosibirsk', async () => {
+  vi.mocked(api.get).mockImplementation(async url => ({data:
+   url==='/metrics' ? [{id:1,name:'eNPS',code:'ENPS',unit:'%',section:'TEAM_GUESTS',displayOrder:1}] :
+   url==='/coffee-shops' ? [{id:7,name:'Тестовая кофейня',city:{id:2,name:'Казань'}}] :
+   url==='/admin/analysis-questions' ? [{questionKey:'inventory_analysis',label:'Анализ инвентаризации',section:'COSTING',displayOrder:1}] :
+   {id:44,coffeeShopId:7,year:2026,month:9,revenue:5000000,drinksCount:50,isEditable:true,metricValues:[],analyses:[],formData:{}}
+  }) as any);
+  render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+  await screen.findByLabelText('eNPS');
+  fireEvent.click(screen.getByRole('button',{name:'Себестоимость'}));
+  expect(screen.getByRole('note')).toHaveTextContent('Инвентаризация пока доступна только для кофеен Омска и Новосибирска.');
+  expect(screen.queryByLabelText('Сумма излишков, ₽')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Сумма недостач, ₽')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:/Анализ инвентаризации/})).not.toBeInTheDocument();
  });
  it('colors a saved metric using its server-calculated zone', async () => {
   vi.mocked(api.get).mockImplementation(async (url) => {
@@ -185,20 +417,26 @@ describe('LeaderReportPage', () => {
 
  it('loads giftsLink beside the gifts metric and keeps the link available in a read-only report', async () => {
   const url='https://example.org/gifts?month=2026-09';
+  const equipmentUrl='https://example.org/equipment-plan?month=2026-09';
   vi.mocked(api.get).mockImplementation(async path => ({data:
    path==='/metrics' ? [{id:1,name:'eNPS',code:'ENPS',unit:'%',section:'TEAM_GUESTS',displayOrder:1}] :
    path==='/coffee-shops' ? [{id:7,name:'Тестовая кофейня'}] :
    path==='/admin/analysis-questions' ? [] :
    path==='/reports/editing-policy' ? {historicalEditingEnabled:false} :
-   {id:44,coffeeShopId:7,year:2026,month:9,revenue:1000,drinksCount:50,isEditable:false,metricValues:[],analyses:[],formData:{giftsLink:url}}
+   {id:44,coffeeShopId:7,year:2026,month:9,revenue:1000,drinksCount:50,isEditable:false,metricValues:[],analyses:[],formData:{giftsLink:url,equipmentLink:equipmentUrl}}
   }) as any);
   render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
   await screen.findByLabelText('Подарки, ₽');
   const gifts=within(screen.getByLabelText('Подарки, ₽').closest('tr')!);
   expect(gifts.getByRole('textbox',{name:'Ссылка на подарки'})).toHaveValue(url);
   expect(gifts.getByRole('textbox',{name:'Ссылка на подарки'})).toBeDisabled();
-  expect(gifts.getByRole('link',{name:'Открыть ссылку'})).toHaveAttribute('href',url);
-  expect(gifts.getByRole('link',{name:'Открыть ссылку'})).toHaveAttribute('rel','noopener noreferrer');
+  expect(gifts.getByRole('link',{name:'Открыть ↗'})).toHaveAttribute('href',url);
+  expect(gifts.getByRole('link',{name:'Открыть ↗'})).toHaveAttribute('rel','noopener noreferrer');
+  fireEvent.click(screen.getByRole('button',{name:'Расходы'}));
+  const equipment=within(screen.getByLabelText('Оборудование, материалы, ремонт, ₽').closest('tr')!);
+  expect(equipment.getByRole('textbox',{name:'Ссылка на план затрат на оборудование'})).toHaveValue(equipmentUrl);
+  expect(equipment.getByRole('textbox',{name:'Ссылка на план затрат на оборудование'})).toBeDisabled();
+  expect(equipment.getByRole('link',{name:'Открыть ↗'})).toHaveAttribute('href',equipmentUrl);
  });
 
  it('autosaves giftsLink with other gift values and supports clearing it', async () => {
@@ -213,12 +451,24 @@ describe('LeaderReportPage', () => {
   await waitFor(()=>expect(api.post).toHaveBeenCalledWith('/reports/draft',expect.objectContaining({formData:{gifts:'100',giftsLink:url}})),{timeout:2500});
   await waitFor(()=>expect(link).toBeEnabled());
   expect(link).toHaveValue(url);
-  expect(gifts.getByRole('link',{name:'Открыть ссылку'})).toHaveAttribute('href',url);
+  expect(gifts.getByRole('link',{name:'Открыть ↗'})).toHaveAttribute('href',url);
   fireEvent.change(link,{target:{value:''}});
-  expect(gifts.queryByRole('link',{name:'Открыть ссылку'})).not.toBeInTheDocument();
+  expect(gifts.queryByRole('link',{name:'Открыть ↗'})).not.toBeInTheDocument();
   await waitFor(()=>expect(api.post).toHaveBeenLastCalledWith('/reports/draft',expect.objectContaining({formData:{gifts:'100',giftsLink:''}})),{timeout:2500});
   await waitFor(()=>expect(link).toBeEnabled());
   expect(link).toHaveValue('');
+ });
+
+ it('autosaves the equipment and repair plan document URL with the report', async () => {
+  render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button',{name:'Расходы'}));
+  const link=await screen.findByRole('textbox',{name:'Ссылка на план затрат на оборудование'});
+  const url='https://example.org/equipment-plan?month=2026-09';
+  fireEvent.change(link,{target:{value:url}});
+  await waitFor(()=>expect(api.post).toHaveBeenCalledWith('/reports/draft',expect.objectContaining({formData:{equipmentLink:url}})),{timeout:2500});
+  await waitFor(()=>expect(link).toBeEnabled());
+  expect(link).toHaveValue(url);
+  expect(screen.getByRole('link',{name:'Открыть ↗'})).toHaveAttribute('href',url);
  });
 
  it('blocks negative facts before autosave and submission while retaining the saved rating and color', async () => {

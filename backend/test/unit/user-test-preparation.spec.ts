@@ -181,7 +181,7 @@ describe('one-time user-test preparation', () => {
     const plan = await prepareUserTest(db.prisma, { input: sample, adminEmail: admin.email });
     expect(plan).toMatchObject({ mode: 'preview', canApply: true, alreadyPrepared: false, citiesToCreate: 1, coffeeShopsToCreate: 1, deletions: { user: 1, monthlyReport: 1 } });
     expect(plan.referenceDataToAdd.metricCodes).toHaveLength(9);
-    expect(plan.referenceDataToAdd.analysisQuestionKeys).toHaveLength(24);
+    expect(plan.referenceDataToAdd.analysisQuestionKeys).toHaveLength(32);
     expect(db.operations).toEqual(['SET TRANSACTION READ ONLY']);
     expect(db.snapshot()).toEqual(before);
     expect(JSON.stringify(plan)).not.toContain(passwordHash);
@@ -222,7 +222,7 @@ describe('one-time user-test preparation', () => {
     expect(after.city.map(row => row.name)).toEqual(['Омск']);
     expect(after.coffeeShop.map(row => [row.name, row.cityId])).toEqual([['Лермонтова', after.city[0].id]]);
     expect(after.metric).toHaveLength(10);
-    expect(after.analysisQuestion).toHaveLength(25);
+    expect(after.analysisQuestion).toHaveLength(33);
     expect(after.triggerConfig).toHaveLength(3);
     expect(db.operations.slice(0, 2)).toEqual(["SET LOCAL lock_timeout = '5000ms'", 'SELECT 1 AS locked FROM pg_advisory_xact_lock(584783965)']);
   });
@@ -232,7 +232,7 @@ describe('one-time user-test preparation', () => {
     await prepareUserTest(db.prisma, applyOptions);
     const after = db.snapshot();
     expect(after.metric).toHaveLength(10);
-    expect(after.analysisQuestion).toHaveLength(25);
+    expect(after.analysisQuestion).toHaveLength(33);
     expect(after.triggerConfig).toHaveLength(3);
     expect(after.ratingColorConfig).toEqual([{ id: 1, greenThreshold: 80, redThreshold: 60 }]);
   });

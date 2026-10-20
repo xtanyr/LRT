@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AnalysisSection } from '@prisma/client';
 import { numberValue } from '../common/validation';
+import { metricCodesForAnalysisQuestion } from '../common/analysis-metric-links';
 
 @Injectable()
 export class AdminService {
@@ -37,10 +38,14 @@ export class AdminService {
   }
 
   async getAnalysisQuestions() {
-    return this.prisma.analysisQuestion.findMany({
+    const questions = await this.prisma.analysisQuestion.findMany({
       where: { isActive: true },
       orderBy: { displayOrder: 'asc' },
     });
+    return questions.map(question => ({
+      ...question,
+      metricCodes: metricCodesForAnalysisQuestion(question),
+    }));
   }
 
   async getTriggerConfigs() {

@@ -58,7 +58,7 @@ describe('Report example help preference', () => {
     await screen.findByLabelText('eNPS');
     fireEvent.click(screen.getByRole('link', {name:'Пример заполнения отчёта'}));
     fireEvent.click(screen.getByRole('button', {name:'Шаг примера'}));
-    fireEvent.click(screen.getByRole('option', {name:'19. Проверка и отправка'}));
+    fireEvent.click(screen.getByRole('option', {name:'20. Проверка и отправка'}));
     expect(api.patch).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('link', {name:'Заполнить свой отчёт'}));
     expect(await screen.findByRole('heading', {name:'Отчёт за 2026-09'})).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe('Report example help preference', () => {
     await screen.findByLabelText('eNPS');
     fireEvent.click(screen.getByRole('link', {name:'Пример заполнения отчёта'}));
     fireEvent.click(screen.getByRole('button', {name:'Шаг примера'}));
-    fireEvent.click(screen.getByRole('option', {name:'19. Проверка и отправка'}));
+    fireEvent.click(screen.getByRole('option', {name:'20. Проверка и отправка'}));
     fireEvent.click(screen.getByRole('link', {name:'Заполнить свой отчёт'}));
     expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось сохранить настройку помощи');
     expect(screen.getByRole('heading', {level:2,name:'Проверка и отправка'})).toBeInTheDocument();
