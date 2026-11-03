@@ -75,8 +75,8 @@ export default function CooReportViewPage() {
           <div className="page-sub">{decodeURIComponent(shopName || '')}</div>
         </div>
       <div className="page-actions">
-        <span className={`badge ${report.status === 'SUBMITTED' ? 'chip-success' : report.status === 'OVERDUE' ? 'chip-danger' : 'chip-ghost'}`}>
-          {report.status === 'SUBMITTED' ? 'сдан' : report.status === 'OVERDUE' ? 'просрочено' : 'черновик'}
+        <span className={`badge ${report.status === 'SUBMITTED' ? 'chip-success' : 'chip-ghost'}`}>
+          {report.status === 'SUBMITTED' ? 'сдан' : 'черновик'}
         </span>
       </div>
       </div>

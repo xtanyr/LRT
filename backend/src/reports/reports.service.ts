@@ -27,7 +27,7 @@ export class ReportsService {
     const imported = report.ratingSnapshot?.source?.policy === 'preserve-source-score';
     const isLocked = Boolean(imported || report.isLocked || state.locked);
     return { ...report, isLocked, isEditable: !imported && (!isLocked || this.getEditingPolicy().historicalEditingEnabled),
-      status: report.status === 'SUBMITTED' ? 'SUBMITTED' : state.overdue ? 'OVERDUE' : 'NOT_FILLED',
+      status: report.status === 'SUBMITTED' ? 'SUBMITTED' : 'NOT_FILLED',
       score: isLocked ? report.ratingSnapshot : calculateScore(metrics, report) };
   }
   private editable(report: any) {

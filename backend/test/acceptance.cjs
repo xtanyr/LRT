@@ -17,7 +17,7 @@ async function request(path, token, method='GET', body) {
  const shop=shops.data[0];
  assert.equal((await request('/coffee-shops/2',token)).status,403);
  assert.equal((await request('/comments/coffee-shop/2',token)).status,403);
- const now=new Date(Date.now()+10800000);const date=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()-1,1));
+ const now=new Date(Date.now()+10800000);const date=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),1));
  const period={coffeeShopId:shop.id,year:date.getUTCFullYear(),month:date.getUTCMonth()+1};
  assert.equal((await request('/reports/draft',token,'POST',{...period,revenue:'123abc'})).status,400);
  const metrics=(await request('/metrics',token)).data;

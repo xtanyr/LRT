@@ -204,7 +204,7 @@ describe('ScoringEngineService', () => {
       metricValue: { update: jest.fn() },
     };
     const service = new ScoringEngineService(prisma as never);
-    await expect(service.calculateRating(1, 2026, 8)).resolves.toMatchObject({ rating: 11.5, maxPoints: 11.5 });
+    await expect(service.calculateRating(1, 2026, 9)).resolves.toMatchObject({ rating: 11.5, maxPoints: 11.5 });
     expect(prisma.metricValue.update).not.toHaveBeenCalled();
   });
 

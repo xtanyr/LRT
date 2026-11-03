@@ -102,14 +102,13 @@ export default function LeaderReportPage() {
  const exampleParams=new URLSearchParams(params);
  exampleParams.set('period',period);
  if(shopId)exampleParams.set('shop',String(shopId));
- const historical=Boolean(report?.isLocked||Date.now()>=Date.UTC(year,month+1,1,-3));
+ const historical=Boolean(report?.isLocked||Date.now()>=Date.UTC(year,month,11,9));
  const locked=typeof report?.isEditable==='boolean'?!report.isEditable:!historicalEditingEnabled&&historical;
  const fieldDisabled=locked||(saving&&!automaticSaveInFlight.current);
  const activeMetrics=metrics.filter(metric=>metric.isActive!==false);
  const activeValues=report?.metricValues.filter(value=>activeMetrics.some(metric=>metric.id===value.metricId))||[];
  const visibleMetrics=locked?metrics.filter(metric=>metric.isActive!==false||report?.metricValues.some(value=>value.metricId===metric.id)||report?.score?.results?.some(result=>result.metricId===metric.id)):activeMetrics;
  const testEditing=historical&&!locked;
- const overdue=Date.now()>=Date.UTC(year,month,10,9)&&report?.status!=='SUBMITTED';
  useEffect(()=>{
   let alive=true;
   Promise.all([api.get('/metrics'),api.get('/coffee-shops'),api.get('/admin/analysis-questions'),api.get('/reports/editing-policy').catch(()=>({data:{historicalEditingEnabled:false}}))]).then(([m,s,q,policy])=>{
@@ -171,7 +170,7 @@ export default function LeaderReportPage() {
   return zone==='TARGET'?' metric-zone-green':zone==='BELOW_TARGET'?' metric-zone-yellow':zone==='CRITICAL'?' metric-zone-red':'';
  };
  const input=(label:string,v:unknown,update:(s:string)=>void,className='')=><input className={'input'+className} aria-label={label} inputMode="decimal" value={String(v??'')} disabled={fieldDisabled} onChange={e=>update(e.target.value)}/>;
- const reportState=locked?'Исторический · только чтение':testEditing?'Исторический · тестовое редактирование':report?.status==='SUBMITTED'?'Заполнено':overdue?'Просрочено':'Не заполнено';
+ const reportState=locked?'Исторический · только чтение':testEditing?'Исторический · тестовое редактирование':report?.status==='SUBMITTED'?'Заполнено':'Не заполнено';
  const saveStatus=visibleError?visibleError:autosaveState==='saving'?'Сохраняем изменения…':autosaveState==='waiting'?'Сохранение через 2 секунды':autosaveState==='saved'?'Все изменения сохранены':locked?'Редактирование закрыто':'Автосохранение включено';
  const activeAnalysisGroups=analysisSections.map(group=>({...group,questions:questions.filter(question=>question.section===group.section&&(question.questionKey!=='inventory_analysis'||inventoryAvailable)).sort((a,b)=>a.displayOrder-b.displayOrder)})).filter(group=>group.questions.length>0&&blockFor(group.section)===activeBlock);
  const activeQuestions=activeAnalysisGroups.flatMap(group=>group.questions);

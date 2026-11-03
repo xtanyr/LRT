@@ -9,7 +9,7 @@ import LoadingState from './LoadingState';
 type Shop = {id:number;name:string;cityId:number;city:{name:string}};
 type Report = {id:number;coffeeShopId:number;year:number;month:number;status:string;submittedAt?:string|null;score:ScoreSnapshot|null};
 type IPV = {id:number;coffeeShopId:number;status:string;triggerCode:string;triggeredAt:string};
-const reportStatusLabels = {SUBMITTED:'Заполнено',DRAFT:'Черновик',NOT_FILLED:'Не заполнено',OVERDUE:'Просрочено'};
+const reportStatusLabels = {SUBMITTED:'Заполнено',DRAFT:'Черновик',NOT_FILLED:'Не заполнено'};
 export default function RatingDashboard({mode}:{mode:'leader'|'city'|'shops'|'cities'|'reports'}) {
  const ratingColor=useRatingColors();
  const isCooOverview=mode==='shops'||mode==='cities';
@@ -26,7 +26,7 @@ export default function RatingDashboard({mode}:{mode:'leader'|'city'|'shops'|'ci
  const [year,month]=period.split('-').map(Number);
  const periodIndex=year*12+month-1;
  const current=reports.filter(r=>r.year===year&&r.month===month);
- const reportState=(r?:Report):keyof typeof reportStatusLabels=>r?.status==='SUBMITTED'?'SUBMITTED':r?.status==='OVERDUE'?'OVERDUE':r?'DRAFT':Date.now()>=Date.UTC(year,month,10,9)?'OVERDUE':'NOT_FILLED';
+ const reportState=(r?:Report):keyof typeof reportStatusLabels=>r?.status==='SUBMITTED'?'SUBMITTED':r?'DRAFT':'NOT_FILLED';
  const cities=[...new Map(shops.map(s=>[s.cityId,{id:s.cityId,name:s.city.name}])).values()];
  const visible=shops.filter(s=>(!cityId||s.cityId===cityId)&&s.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
  const rows=visible.map(shop=>{const report=current.find(r=>r.coffeeShopId===shop.id);return {shop,report,score:report?.status==='SUBMITTED'?report.score?.rating??null:null};}).filter(r=>!canFilterStatus||!statusFilter||reportState(r.report)===statusFilter).sort((a,b)=>ascending?(a.score??-1)-(b.score??-1):(b.score??-1)-(a.score??-1));

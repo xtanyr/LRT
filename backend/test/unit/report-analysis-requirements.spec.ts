@@ -39,6 +39,9 @@ function setup(absoluteValue: number, analyses: { questionKey: string; content: 
 }
 
 describe('report analysis requirements', () => {
+  beforeEach(() => { jest.useFakeTimers(); jest.setSystemTime(new Date('2026-10-20T12:00:00Z')); });
+  afterEach(() => jest.useRealTimers());
+
   it.each([
     { value: 70, zone: 'CRITICAL' },
     { value: 85, zone: 'BELOW_TARGET' },

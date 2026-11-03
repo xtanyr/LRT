@@ -52,7 +52,7 @@ describe('City coffee shop report state by month', () => {
   const reports = [
     { id: 44, coffeeShopId: 7, year: 2026, month: 9, status: 'SUBMITTED', submittedAt: '2026-10-01T05:20:00.000Z', score: { rating: 88, results: [] } },
     { id: 45, coffeeShopId: 8, year: 2026, month: 9, status: 'NOT_FILLED', submittedAt: null, score: { rating: 20, results: [] } },
-    { id: 43, coffeeShopId: 7, year: 2026, month: 8, status: 'OVERDUE', submittedAt: null, score: { rating: 44, results: [] } },
+    { id: 43, coffeeShopId: 7, year: 2026, month: 8, status: 'NOT_FILLED', submittedAt: null, score: { rating: 44, results: [] } },
     { id: 42, coffeeShopId: 8, year: 2026, month: 8, status: 'SUBMITTED', submittedAt: '2026-09-05T06:00:00.000Z', score: { rating: 55, results: [] } },
   ];
   const rowFor = (name: string) => within(screen.getByRole('link', { name }).closest('tr')!);
@@ -110,13 +110,13 @@ describe('City coffee shop report state by month', () => {
     await screen.findByRole('link', { name: 'На Ленина' });
     chooseMonth('авг');
 
-    expect(rowFor('На Ленина').getByText('Просрочено')).toBeInTheDocument();
+    expect(rowFor('На Ленина').getByText('Черновик')).toBeInTheDocument();
     expect(rowFor('На Ленина').queryByText(/МСК/)).not.toBeInTheDocument();
     expect(rowFor('На Ленина').queryByText('88.0')).not.toBeInTheDocument();
     expect(rowFor('На Мира').getByText('Заполнено')).toBeInTheDocument();
     expect(rowFor('На Мира').getByText('05.09.2026, 09:00:00 МСК')).toBeInTheDocument();
     expect(rowFor('На Мира').getByText('55.0')).toHaveStyle({ color: 'var(--danger)' });
-    expect(rowFor('На Маркса').getByText('Просрочено')).toBeInTheDocument();
+    expect(rowFor('На Маркса').getByText('Не заполнено')).toBeInTheDocument();
     expect(submissionCount()).toHaveTextContent('1 / 3');
 
     chooseMonth('окт');
@@ -148,21 +148,10 @@ describe('City coffee shop report state by month', () => {
     chooseMonth('авг');
     expect(submissionCount()).toHaveTextContent('0 / 2');
     expect(rowFor('Coffee Shop 1').getByText('Черновик')).toBeInTheDocument();
-    expect(rowFor('Coffee Shop 2').getByText('Просрочено')).toBeInTheDocument();
+    expect(rowFor('Coffee Shop 2').getByText('Не заполнено')).toBeInTheDocument();
     expect(screen.queryByText('85.8')).not.toBeInTheDocument();
     expect(screen.queryByText('71.5')).not.toBeInTheDocument();
     expect(screen.queryByText('100.0')).not.toBeInTheDocument();
-  });
-
-  it('uses the server overdue state even when the browser date is before that period deadline', async () => {
-    vi.mocked(api.get).mockImplementation(async (url) => ({ data: url === '/dashboard/city-leader'
-      ? { coffeeShops: [coffeeShops[0]], reports: [{ ...reports[0], status: 'OVERDUE', submittedAt: null }], ipvStatuses: [] }
-      : { greenThreshold: 80, redThreshold: 60 } }) as any);
-    render(<MemoryRouter><CityDashboardPage /></MemoryRouter>);
-    await screen.findByRole('link', { name: 'На Ленина' });
-
-    expect(rowFor('На Ленина').getByText('Просрочено')).toBeInTheDocument();
-    expect(rowFor('На Ленина').queryByText('Заполнено')).not.toBeInTheDocument();
   });
 
   it.each([
