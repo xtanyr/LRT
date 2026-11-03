@@ -1,1 +1,6 @@
 .yearly-ratings{max-width:1240px}.yearly-filter{display:grid;grid-template-columns:auto 130px;align-items:center;gap:8px;color:var(--ink-2);font-size:12px}.yearly-legend{display:flex;justify-content:space-between;gap:12px;margin:0 0 12px;color:var(--ink-2);font-size:12px}.yearly-table th:not(:first-child),.yearly-table td:not(:first-child){min-width:58px;text-align:center}.yearly-score{display:inline-grid;min-width:32px;place-items:center;font-family:var(--font-mono);font-weight:600}.city-average-row td{background:var(--surface-2);border-top:2px solid var(--line);font-weight:600}.city-shop-name{padding-left:28px!important}.yearly-shop-name{font-weight:600}.yearly-leaders{max-width:220px;margin-top:2px;color:var(--ink-2);font-size:11px;line-height:1.35;white-space:normal}@media(max-width:640px){.yearly-filter{width:100%}.yearly-legend{flex-direction:column}.yearly-table th:not(:first-child),.yearly-table td:not(:first-child){min-width:52px}}
+
+.yearly-table td:first-child,.yearly-table.table-sticky thead th:first-child{position:sticky;left:0;box-shadow:1px 0 0 var(--line)}
+.yearly-table td:first-child{z-index:1;background:var(--surface)}
+.yearly-table .city-average-row td:first-child{background:var(--surface-2)}
+.yearly-table.table-sticky thead th:first-child{z-index:3;background:var(--surface)}

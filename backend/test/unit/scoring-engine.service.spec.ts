@@ -119,18 +119,42 @@ describe('calculateScore', () => {
   });
 
   it.each([
-    [13_000, 11, 8.5],
-    [12_999, 8.5, 7.5],
-    [10_000, 8.5, 7.5],
-    [9_999, 7.5, 6.2],
-    [7_000, 7.5, 6.2],
-    [6_999, 6.2, 4],
+    [17_000, 9.5, 9],
+    [16_999, 9.25, 8.75],
+    [16_000, 9.25, 8.75],
+    [15_999, 9, 8.5],
+    [15_000, 9, 8.5],
+    [14_999, 8.8, 8.3],
+    [14_000, 8.8, 8.3],
+    [13_999, 8.5, 8],
+    [13_000, 8.5, 8],
+    [12_999, 8.2, 7.7],
+    [12_000, 8.2, 7.7],
+    [11_999, 7.8, 7.3],
+    [11_000, 7.8, 7.3],
+    [10_999, 7.5, 7],
+    [10_000, 7.5, 7],
+    [9_999, 7.1, 6.6],
+    [9_000, 7.1, 6.6],
+    [8_999, 6.6, 6.2],
+    [8_000, 6.6, 6.2],
+    [7_999, 6.2, 5.8],
+    [7_000, 6.2, 5.8],
   ])('uses the performance tier for %s drinks', (drinksCount, strong, medium) => {
     const performance = metric({ code: 'PERFORMANCE', unit: 'ед.', thresholdStrong: 999, thresholdMedium: 998, pointsStrong: 8.5, pointsMedium: 4.25 });
     const strongResult = calculateScore([performance], report(strong, { drinksCount }));
     const mediumResult = calculateScore([performance], report(medium, { drinksCount }));
+    const redResult = calculateScore([performance], report(medium - 0.01, { drinksCount }));
     expect(strongResult.results[0]).toMatchObject({ thresholdStrong: strong, thresholdMedium: medium, zone: 'TARGET', pointsAwarded: 8.5 });
     expect(mediumResult.results[0]).toMatchObject({ zone: 'BELOW_TARGET', pointsAwarded: 4.25 });
+    expect(redResult.results[0]).toMatchObject({ zone: 'CRITICAL', pointsAwarded: 0 });
+  });
+
+  it.each([0, 1, 6_999])('treats any performance as red below 7 000 drinks (%s)', (drinksCount) => {
+    const performance = metric({ code: 'PERFORMANCE', unit: 'ед.', pointsStrong: 8.5, pointsMedium: 4.25 });
+    const result = calculateScore([performance], report(11, { drinksCount }));
+    expect(result.results[0]).toMatchObject({ zone: 'CRITICAL', pointsAwarded: 0 });
+    expect(result.rating).toBe(0);
   });
 
   it('totals five expensive and five inexpensive target metrics to 100', () => {

@@ -64,12 +64,28 @@ function round(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-function performanceThresholds(drinksCount: number | null | undefined) {
+// Пороги производительности по количеству напитков за месяц: [от напитков, зелёный от, жёлтый от].
+// Ниже жёлтого — красный. До 7 000 напитков любая производительность — красная зона.
+const PERFORMANCE_TIERS: ReadonlyArray<readonly [number, number, number]> = [
+  [17_000, 9.5, 9],
+  [16_000, 9.25, 8.75],
+  [15_000, 9, 8.5],
+  [14_000, 8.8, 8.3],
+  [13_000, 8.5, 8],
+  [12_000, 8.2, 7.7],
+  [11_000, 7.8, 7.3],
+  [10_000, 7.5, 7],
+  [9_000, 7.1, 6.6],
+  [8_000, 6.6, 6.2],
+  [7_000, 6.2, 5.8],
+];
+
+type PerformanceThresholds = { strong: number; medium: number } | { alwaysCritical: true } | null;
+
+function performanceThresholds(drinksCount: number | null | undefined): PerformanceThresholds {
   if (drinksCount == null) return null;
-  if (drinksCount >= 13_000) return { strong: 11, medium: 8.5 };
-  if (drinksCount >= 10_000) return { strong: 8.5, medium: 7.5 };
-  if (drinksCount >= 7_000) return { strong: 7.5, medium: 6.2 };
-  return { strong: 6.2, medium: 4 };
+  const tier = PERFORMANCE_TIERS.find(([from]) => drinksCount >= from);
+  return tier ? { strong: tier[1], medium: tier[2] } : { alwaysCritical: true };
 }
 
 function classify(
@@ -102,8 +118,10 @@ export function calculateScore(metrics: ScoringMetric[], report: ScoringReport):
     const performance = metric.code === 'PERFORMANCE'
       ? performanceThresholds(report.drinksCount)
       : undefined;
-    const thresholdStrong = performance?.strong ?? asNumber(metric.thresholdStrong);
-    const thresholdMedium = performance?.medium ?? asNumber(metric.thresholdMedium);
+    const tier = performance && 'strong' in performance ? performance : undefined;
+    const alwaysCritical = performance != null && 'alwaysCritical' in performance;
+    const thresholdStrong = tier?.strong ?? asNumber(metric.thresholdStrong);
+    const thresholdMedium = tier?.medium ?? asNumber(metric.thresholdMedium);
     const metricValue = report.metricValues.find((value) => value.metricId === metric.id);
     const absoluteValue = metricValue?.absoluteValue == null ? null : asNumber(metricValue.absoluteValue);
 
@@ -126,7 +144,9 @@ export function calculateScore(metrics: ScoringMetric[], report: ScoringReport):
       }
 
       if (scoreValue != null) {
-        zone = classify(scoreValue, metric.direction, thresholdStrong, thresholdMedium);
+        zone = alwaysCritical
+          ? 'CRITICAL'
+          : classify(scoreValue, metric.direction, thresholdStrong, thresholdMedium);
         pointsAwarded = zone === 'TARGET'
           ? pointsStrong
           : zone === 'BELOW_TARGET'
