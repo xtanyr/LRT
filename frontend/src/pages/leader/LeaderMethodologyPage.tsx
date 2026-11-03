@@ -19,6 +19,20 @@ interface Metric {
   isActive?: boolean;
 }
 
+const performanceTiers = [
+  ['17 000 и более', '9,5', '9,0'],
+  ['16 000–16 999', '9,25', '8,75'],
+  ['15 000–15 999', '9,0', '8,5'],
+  ['14 000–14 999', '8,8', '8,3'],
+  ['13 000–13 999', '8,5', '8,0'],
+  ['12 000–12 999', '8,2', '7,7'],
+  ['11 000–11 999', '7,8', '7,3'],
+  ['10 000–10 999', '7,5', '7,0'],
+  ['9 000–9 999', '7,1', '6,6'],
+  ['8 000–8 999', '6,6', '6,2'],
+  ['7 000–7 999', '6,2', '5,8'],
+];
+
 export default function LeaderMethodologyPage() {
   const { search } = useLocation();
   const [metrics, setMetrics] = useState<Metric[]>([]);
@@ -77,7 +91,23 @@ export default function LeaderMethodologyPage() {
         </p>
       </div>
 
-      <div className="card"><div className="card-title">Производительность</div><p>Значение вводится вручную. Пороги выбираются по количеству напитков за отчётный месяц.</p><table className="table"><thead><tr><th>Напитков</th><th>Целевой ≥</th><th>Ниже цели ≥</th></tr></thead><tbody><tr><td>13 000 и более</td><td>11</td><td>8,5</td></tr><tr><td>10 000–12 999</td><td>8,5</td><td>7,5</td></tr><tr><td>7 000–9 999</td><td>7,5</td><td>6,2</td></tr><tr><td>Менее 7 000</td><td>6,2</td><td>4</td></tr></tbody></table></div>
+      <div className="card" data-testid="performance-methodology">
+        <div className="card-title">Производительность</div>
+        <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6, marginBottom: 12 }}>
+          Значение вводится вручную. Пороги зависят от количества напитков за отчётный месяц: чем больше напитков, тем выше требуемая производительность. Значение ниже порога жёлтой зоны попадает в красную и даёт 0 баллов. При менее чем 7 000 напитков за месяц любая производительность считается красной.
+        </p>
+        <div className="table-wrap">
+          <table className="table">
+            <thead><tr><th>Напитков в месяц</th><th>Красная (0 баллов)</th><th>Жёлтая</th><th>Зелёная</th></tr></thead>
+            <tbody>
+              <tr><td>Менее 7 000</td><td>любая производительность</td><td>—</td><td>—</td></tr>
+              {performanceTiers.map(([range, green, yellow]) => (
+                <tr key={range}><td>{range}</td><td>&lt; {yellow}</td><td>{yellow}–{(Number(green.replace(',', '.')) - 0.01).toFixed(2).replace('.', ',')}</td><td>{green}–11</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {groups.map((g) => {
         const groupMetrics = metrics.filter((m) => g.keys.includes(m.code));
@@ -104,8 +134,8 @@ export default function LeaderMethodologyPage() {
                       <td>{m.name}</td>
                       <td className="muted">{m.unit}</td>
                       <td className="muted">{m.direction === 'HIGHER_IS_BETTER' ? '↑' : '↓'}</td>
-                      <td className="muted">{m.targetValue ?? '—'}</td>
-                      <td className="muted">{m.midValue ?? '—'}</td>
+                      <td className="muted">{m.code === 'PERFORMANCE' ? 'по таблице выше' : (m.targetValue ?? '—')}</td>
+                      <td className="muted">{m.code === 'PERFORMANCE' ? 'по таблице выше' : (m.midValue ?? '—')}</td>
                       <td className="muted">{m.pointsStrong ?? m.ptTarget ?? '—'}</td>
                       <td className="muted">{m.pointsMedium ?? m.ptMid ?? '—'}</td>
                     </tr>

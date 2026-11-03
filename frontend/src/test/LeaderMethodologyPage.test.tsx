@@ -35,3 +35,17 @@ it.each(['legacy decimal strings', 'canonical points with null aliases'])('adds 
   render(<MemoryRouter><LeaderMethodologyPage /></MemoryRouter>);
   expect(await screen.findByText(/Текущий максимум — 100 баллов/)).toBeInTheDocument();
 });
+
+it('shows the performance thresholds by drinks count with red below 7 000 drinks', async () => {
+  vi.mocked(api.get).mockResolvedValue({ data: [
+    { id: 9, name: 'Производительность', code: 'PERFORMANCE', unit: 'ед.', direction: 'HIGHER_IS_BETTER', targetValue: 11, midValue: 8.5, ptTarget: 8.5, ptMid: 4.25, isActive: true },
+  ] } as any);
+  render(<MemoryRouter><LeaderMethodologyPage /></MemoryRouter>);
+  const card = await screen.findByTestId('performance-methodology');
+  expect(card).toHaveTextContent('Менее 7 000');
+  expect(card).toHaveTextContent('любая производительность');
+  expect(card).toHaveTextContent('7 000–7 999< 5,85,8–6,196,2–11');
+  expect(card).toHaveTextContent('17 000 и более< 9,09,0–9,499,5–11');
+  expect(card).toHaveTextContent('16 000–16 999< 8,758,75–9,249,25–11');
+  expect(screen.getAllByText('по таблице выше')).toHaveLength(2);
+});
