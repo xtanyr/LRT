@@ -92,7 +92,7 @@ export class IpvTriggersService {
         coffeeShopId: shop.id, coffeeShop: { id: shop.id, name: shop.name, city: shop.city },
         leaders: evaluation.leaders.map(a => ({
           id: a.user.id, name: a.user.name, approvedAt: a.user.approvedAt, assignedFrom: a.assignedFrom,
-          exemptions: a.user.exemptions.map(e => ({ ...e, canClear: this.access.global(user) || e.setById === user.id })),
+          exemptions: a.user.exemptions.map(e => ({ ...e, canClear: this.access.canManage(user) || e.setById === user.id })),
         })), checks: evaluation.checks,
       };
     }));
@@ -169,6 +169,6 @@ export class IpvTriggersService {
       { user: { coffeeShopAssignments: { some: { ...currentAssignmentWhere(), coffeeShop: this.access.shopWhere(user) } } } },
     ];
     const rows = await this.prisma.triggerExemption.findMany({ where, include: { user: { select: { id: true, name: true } } } });
-    return rows.map(r => ({ ...r, canClear: this.access.global(user) || r.setById === user.id }));
+    return rows.map(r => ({ ...r, canClear: this.access.canManage(user) || r.setById === user.id }));
   }
 }

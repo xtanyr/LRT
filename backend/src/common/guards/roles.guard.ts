@@ -8,6 +8,11 @@ export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
+    // Роль «Просмотр» имеет доступ только на чтение: любые изменяющие запросы запрещены независимо от списка ролей.
+    const request = context.switchToHttp().getRequest();
+    if (request.user?.role === UserRole.VIEWER && !['GET', 'HEAD', 'OPTIONS'].includes(String(request.method).toUpperCase())) {
+      throw new ForbiddenException('Роль «Просмотр» доступна только для просмотра');
+    }
     const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass(),

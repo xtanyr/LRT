@@ -15,14 +15,14 @@ export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Get()
-  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get current user notifications' })
   getNotifications(@GetUser() user: any) {
     return this.notificationsService.getNotifications(user.sub);
   }
 
   @Get('unread-count')
-  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get unread notifications count' })
   getUnreadCount(@GetUser() user: any) {
     return this.notificationsService.getUnreadCount(user.sub);

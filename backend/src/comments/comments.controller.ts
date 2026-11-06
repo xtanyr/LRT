@@ -15,7 +15,7 @@ export class CommentsController {
   constructor(private readonly commentsService: CommentsService) {}
 
   @Get('coffee-shop/:coffeeShopId')
-  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get comments for coffee shop' })
   getComments(@Param('coffeeShopId') coffeeShopId: string, @GetUser() user: any) {
     return this.commentsService.getComments(Number(coffeeShopId), user);

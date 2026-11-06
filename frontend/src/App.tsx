@@ -43,12 +43,12 @@ export default function App() {
         <Route path="methodology" element={<LeaderMethodologyPage />} />
         <Route path="report" element={<LeaderReportPage />} />
         <Route path="report-example" element={<ReportExamplePage />} />
-        <Route path="shop/:shopId" element={<RequireRole roles={['CITY_LEADER', 'COO', 'ADMIN']}><CityShopPage /></RequireRole>} />
-        <Route path="triggers" element={<RequireRole roles={['CITY_LEADER', 'COO', 'ADMIN']}><CityTriggersPage /></RequireRole>} />
-        <Route path="cities" element={<RequireRole roles={['COO']}><Navigate to="/?view=cities" replace /></RequireRole>} />
-        <Route path="reports" element={<RequireRole roles={['COO']}><CooReportsPage /></RequireRole>} />
-        <Route path="yearly-ratings" element={<RequireRole roles={['CITY_LEADER', 'COO']}><YearlyRatingsPage /></RequireRole>} />
-        <Route path="reports/:shopName/:month" element={<RequireRole roles={['COO']}><CooReportViewPage /></RequireRole>} />
+        <Route path="shop/:shopId" element={<RequireRole roles={['CITY_LEADER', 'COO', 'ADMIN', 'VIEWER']}><CityShopPage /></RequireRole>} />
+        <Route path="triggers" element={<RequireRole roles={['CITY_LEADER', 'COO', 'ADMIN', 'VIEWER']}><CityTriggersPage /></RequireRole>} />
+        <Route path="cities" element={<RequireRole roles={['COO', 'VIEWER']}><Navigate to="/?view=cities" replace /></RequireRole>} />
+        <Route path="reports" element={<RequireRole roles={['COO', 'VIEWER']}><CooReportsPage /></RequireRole>} />
+        <Route path="yearly-ratings" element={<RequireRole roles={['CITY_LEADER', 'COO', 'VIEWER']}><YearlyRatingsPage /></RequireRole>} />
+        <Route path="reports/:shopName/:month" element={<RequireRole roles={['COO', 'VIEWER']}><CooReportViewPage /></RequireRole>} />
         <Route path="metrics" element={<RequireRole roles={['ADMIN']}><AdminMetricsPage /></RequireRole>} />
         <Route path="structure" element={<RequireRole roles={['ADMIN']}><AdminStructurePage /></RequireRole>} />
         <Route path="config" element={<RequireRole roles={['ADMIN']}><AdminConfigPage /></RequireRole>} />

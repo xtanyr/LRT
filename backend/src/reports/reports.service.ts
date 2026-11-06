@@ -21,14 +21,17 @@ export class ReportsService {
     return { historicalEditingEnabled: this.config.get<string>('ALLOW_HISTORICAL_REPORT_EDITING') === 'true' };
   }
 
-  private decorate(report: any, metrics: any[]) {
+  private decorate(report: any, metrics: any[], user?: Actor) {
     if (!report) return null;
     const state = reportPeriodState(report.year, report.month);
     const imported = report.ratingSnapshot?.source?.policy === 'preserve-source-score';
     const isLocked = Boolean(imported || report.isLocked || state.locked);
-    return { ...report, isLocked, isEditable: !imported && (!isLocked || this.getEditingPolicy().historicalEditingEnabled),
+    return { ...report, isLocked, isEditable: !imported && user?.role !== 'VIEWER' && (!isLocked || this.getEditingPolicy().historicalEditingEnabled),
       status: report.status === 'SUBMITTED' ? 'SUBMITTED' : 'NOT_FILLED',
       score: isLocked ? report.ratingSnapshot : calculateScore(metrics, report) };
+  }
+  private assertCanWrite(user: Actor) {
+    if (user?.role === 'VIEWER') throw new ForbiddenException('Роль «Просмотр» доступна только для просмотра');
   }
   private editable(report: any) {
     if (report.ratingSnapshot?.source?.policy === 'preserve-source-score') throw new ForbiddenException('Импортированный исторический отчёт доступен только для чтения: исходный рейтинг сохраняется.');
@@ -39,19 +42,20 @@ export class ReportsService {
     await this.access.requireShop(user, coffeeShopId);
     reportPeriodState(year, month);
     const report = await this.prisma.monthlyReport.findUnique({ where: { coffeeShopId_year_month: { coffeeShopId, year, month } }, include: includeReport });
-    return this.decorate(report, await this.prisma.metric.findMany({ where: { isActive: true } }));
+    return this.decorate(report, await this.prisma.metric.findMany({ where: { isActive: true } }), user);
   }
   async getReportById(id: number, user: Actor) {
     await this.access.requireReport(user, id);
-    return this.decorate(await this.prisma.monthlyReport.findUnique({ where: { id }, include: includeReport }), await this.prisma.metric.findMany({ where: { isActive: true } }));
+    return this.decorate(await this.prisma.monthlyReport.findUnique({ where: { id }, include: includeReport }), await this.prisma.metric.findMany({ where: { isActive: true } }), user);
   }
   async getReportsByUser(user: Actor) {
     const reports = await this.prisma.monthlyReport.findMany({ where: { coffeeShop: this.access.shopWhere(user) }, include: includeReport, orderBy: [{ year: 'desc' }, { month: 'desc' }] });
     const metrics = await this.prisma.metric.findMany({ where: { isActive: true }, orderBy: { displayOrder: 'asc' } });
-    return reports.map(r => this.decorate(r, metrics));
+    return reports.map(r => this.decorate(r, metrics, user));
   }
   async createOrUpdateDraft(data: any, user: Actor) {
     if (!data || typeof data !== 'object' || (data.metricValues !== undefined && !Array.isArray(data.metricValues)) || (data.analyses !== undefined && !Array.isArray(data.analyses)) || (data.formData !== undefined && (!data.formData || typeof data.formData !== 'object' || Array.isArray(data.formData)))) throw new BadRequestException('Некорректная структура отчёта');
+    this.assertCanWrite(user);
     const coffeeShopId = positiveId(data.coffeeShopId), year = Number(data.year), month = Number(data.month);
     const shop = await this.access.requireShop(user, coffeeShopId);
     if (!shop.isActive) throw new ForbiddenException('Кофейня закрыта');
@@ -121,6 +125,7 @@ export class ReportsService {
     return this.createOrUpdateDraft({ ...report, analyses: [{ questionKey, content }] }, user);
   }
   async submitReport(id: number, user: Actor) {
+    this.assertCanWrite(user);
     await this.access.requireReport(user, id);
     return this.prisma.$transaction(async tx => {
       const report = await tx.monthlyReport.findUniqueOrThrow({ where: { id }, include: includeReport });

@@ -364,6 +364,7 @@ enum UserRole {
   CITY_LEADER
   COO
   ADMIN
+  VIEWER
 }
 
 enum MetricDirection {

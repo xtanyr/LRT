@@ -28,6 +28,11 @@ const ROLE_MENUS: Record<UserRole, { label: string; to: string }[]> = {
     { label: 'Рейтинги за год', to: '/yearly-ratings' },
     { label: 'Отчёты по месяцам', to: '/reports' },
   ],
+  VIEWER: [
+    { label: 'Дашборд', to: '/' },
+    { label: 'Рейтинги за год', to: '/yearly-ratings' },
+    { label: 'Отчёты по месяцам', to: '/reports' },
+  ],
   ADMIN: [
     { label: 'Метрики', to: '/metrics' },
     { label: 'Структура', to: '/structure' },
@@ -59,11 +64,23 @@ const COO_MENU_GROUPS = [
   },
 ];
 
+// Просмотр (VIEWER): «Работа с отчётами» без пункта «Заполнить отчёт», без управления системой.
+const VIEWER_MENU_GROUPS = [
+  {
+    label: 'Работа с отчётами',
+    items: [
+      { label: 'Триггеры ИПВ', to: '/triggers' },
+      { label: 'Методика', to: '/methodology' },
+    ],
+  },
+];
+
 const ROLE_LABELS: Record<UserRole, string> = {
   LEADER: 'Лидер кофейни',
   CITY_LEADER: 'Лидер города',
   COO: 'Операционный директор',
   ADMIN: 'Администратор',
+  VIEWER: 'Просмотр',
 };
 
 export default function AppLayout({ children }: AppLayoutProps) {
@@ -97,12 +114,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
               key={item.to}
               to={item.to}
               end={item.to === '/'}
-              className={({ isActive }) => `sidebar-link${isActive || (role === 'COO' && item.to === '/' && location.pathname === '/cities') ? ' active' : ''}`}
+              className={({ isActive }) => `sidebar-link${isActive || ((role === 'COO' || role === 'VIEWER') && item.to === '/' && location.pathname === '/cities') ? ' active' : ''}`}
             >
               <span className="sidebar-link-text">{item.label}</span>
             </NavLink>
           ))}
-          {role === 'COO' && COO_MENU_GROUPS.map((group) => {
+          {(role === 'COO' ? COO_MENU_GROUPS : role === 'VIEWER' ? VIEWER_MENU_GROUPS : []).map((group) => {
             const containsActiveRoute = group.items.some((item) => item.to === location.pathname);
             return (
               <details className="sidebar-group" key={group.label} open={containsActiveRoute || undefined}>

@@ -1,9 +1,10 @@
 import { useRatingColors } from '../../services/rating-colors';
 import { computeReportScore, metricZone, type ScoredReport } from '../../services/report-score';
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { api } from '../../services/api';
+import { AuthContext } from '../../types/auth';
 import LoadingState from '../../components/LoadingState';
 import '../../styles/pages.css';
 
@@ -53,6 +54,8 @@ interface Comment {
 
 
 export default function CityShopPage() {
+  const auth = useContext(AuthContext);
+  const readOnly = (auth?.viewAsRole || auth?.user?.role) === 'VIEWER';
   const ratingColor = useRatingColors();
   const { shopId } = useParams();
   const [shop, setShop] = useState<{ id: number; name: string; city: { name: string }; leader: { name: string } | null } | null>(null);
@@ -275,7 +278,7 @@ export default function CityShopPage() {
         ) : (
           <div className="empty">Нет комментариев</div>
         )}
-        <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+        {!readOnly && <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
           <input
             className="input"
             placeholder="Добавить комментарий..."
@@ -296,7 +299,7 @@ export default function CityShopPage() {
           }}>
             Отправить
           </button>
-        </div>
+        </div>}
       </div>
     </div>
   );

@@ -20,6 +20,7 @@ export default function DashboardPage() {
     case 'CITY_LEADER':
       return <CityDashboardPage />;
     case 'COO':
+    case 'VIEWER':
       return <CooShopsPage />;
     case 'ADMIN':
       return <AdminMetricsPage />;

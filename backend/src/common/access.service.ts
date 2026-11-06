@@ -14,6 +14,11 @@ export class AccessService {
 
   global(user: Actor) {
     if (!user?.id) throw new ForbiddenException('Требуется авторизация');
+    return user.role === 'ADMIN' || user.role === 'COO' || user.role === 'VIEWER';
+  }
+
+  /** Право изменять данные «глобально»: администратор и COO. Роль «Просмотр» (VIEWER) только просматривает. */
+  canManage(user: Actor) {
     return user.role === 'ADMIN' || user.role === 'COO';
   }
 

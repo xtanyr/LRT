@@ -29,14 +29,14 @@ export class DashboardController {
   }
 
   @Get('coo')
-  @Roles(UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.COO, UserRole.ADMIN, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get COO dashboard' })
   getCooDashboard(@GetUser() user: any) {
     return this.dashboardService.getCooDashboard(user);
   }
 
   @Get('city/:cityId/summary')
-  @Roles(UserRole.COO, UserRole.ADMIN, UserRole.CITY_LEADER)
+  @Roles(UserRole.COO, UserRole.ADMIN, UserRole.CITY_LEADER, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get city summary' })
   getCitySummary(@Param('cityId') cityId: string, @GetUser() user: any) {
     return this.dashboardService.getCitySummary(Number(cityId), user);

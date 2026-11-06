@@ -15,21 +15,21 @@ export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
   @Get('editing-policy')
-  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get report editing policy for the current environment' })
   getEditingPolicy() {
     return this.reportsService.getEditingPolicy();
   }
 
   @Get('my')
-  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get reports for current user' })
   getMyReports(@GetUser() user: any) {
     return this.reportsService.getReportsByUser(user);
   }
 
   @Get('coffee-shop/:coffeeShopId/:year/:month')
-  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get report by coffee shop, year, and month' })
   getReport(
     @Param('coffeeShopId') coffeeShopId: string,
@@ -47,7 +47,7 @@ export class ReportsController {
   }
 
   @Get(':id')
-  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get report by ID' })
   getOne(@Param('id') id: string, @GetUser() user: any) {
     return this.reportsService.getReportById(parseInt(id), user);

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { api } from '../../services/api';
+import { AuthContext } from '../../types/auth';
 import { triggerDescription, type TriggerRule } from '../../services/trigger-description';
 import LoadingState from '../../components/LoadingState';
 import '../../styles/pages.css';
@@ -50,6 +51,8 @@ const actionMessage = (error: unknown, fallback: string) => {
 };
 
 export default function CityTriggersPage() {
+  const auth = useContext(AuthContext);
+  const readOnly = (auth?.viewAsRole || auth?.user?.role) === 'VIEWER';
   const [items, setItems] = useState<IPVStatus[]>([]);
   const [configs, setConfigs] = useState<TriggerConfig[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
@@ -127,7 +130,7 @@ export default function CityTriggersPage() {
       <div><h1 className="page-title">Триггеры ИПВ</h1><div className="page-sub">Сработавшие условия и мониторинг кофеен</div>
         {evaluatedAt && <p className="helper-text">Последняя проверка: {moscowDate(evaluatedAt, true)}</p>}
       </div>
-      <button className="btn btn-primary" disabled={loading || !!busy} onClick={() => void evaluate()}>{busy === 'evaluate' ? 'Проверяем…' : 'Проверить сейчас'}</button>
+      {!readOnly && <button className="btn btn-primary" disabled={loading || !!busy} onClick={() => void evaluate()}>{busy === 'evaluate' ? 'Проверяем…' : 'Проверить сейчас'}</button>}
     </div>
     {actionError && <p role="alert" className="trigger-error">{actionError}</p>}
     {loading ? <LoadingState /> : loadError ? <div className="card"><p role="alert" className="trigger-error">{loadError}</p><button className="btn btn-ghost" onClick={() => void load()}>Повторить загрузку</button></div> : <>
@@ -148,8 +151,8 @@ export default function CityTriggersPage() {
                 {item.daysOverdue > 0 && <div className="chip chip-danger">🔴 Просрочено на {item.daysOverdue} дн.</div>}
                 {item.closeReason && <p className="trigger-outcome">{item.closeReason}</p>}
               </td>
-              <td>{item.status === 'NOT_STARTED' && <button className="btn btn-ghost btn-sm" disabled={!!busy} onClick={() => void begin(item.id)}>Взять в работу</button>}
-                {item.status === 'IN_PROGRESS' && (closingId === item.id ? <div className="trigger-inline-form">
+              <td>{!readOnly && item.status === 'NOT_STARTED' && <button className="btn btn-ghost btn-sm" disabled={!!busy} onClick={() => void begin(item.id)}>Взять в работу</button>}
+                {!readOnly && item.status === 'IN_PROGRESS' && (closingId === item.id ? <div className="trigger-inline-form">
                   <label>Итог ИПВ<textarea className="input" rows={2} maxLength={2000} value={closeReason} disabled={!!busy} onChange={event => setCloseReason(event.target.value)} /></label>
                   <span className="helper-text">Не менее 3 символов, включая букву или цифру.</span>
                   <button className="btn btn-primary btn-sm" disabled={!!busy || !meaningfulReason(closeReason)} onClick={() => void complete(item.id)}>Сохранить итог</button>
@@ -167,8 +170,8 @@ export default function CityTriggersPage() {
               const active = exemptions.filter(exemption => exemption.userId === leader.id);
               return <div className="trigger-leader" key={leader.id}>
                 <strong>{leader.name}</strong><div className="helper-text">Назначен: {moscowDate(leader.assignedFrom)} · Утверждён: {moscowDate(leader.approvedAt)}</div>
-                {active.map(exemption => <div className="trigger-exemption" key={exemption.id}><span>{exemption.reason}</span>{exemption.canClear && <button className="btn btn-ghost btn-sm" disabled={!!busy} onClick={() => void clear(exemption.id)}>Снять исключение</button>}</div>)}
-                {!active.length && <div className="trigger-exemption-form"><label>Причина исключения для {leader.name}<input className="input" aria-label={'Причина исключения для ' + leader.name} maxLength={1000} value={reasons[leader.id] ?? ''} disabled={!!busy} onChange={event => setReasons(previous => ({ ...previous, [leader.id]: event.target.value }))} /><span className="helper-text">Не менее 3 символов, включая букву или цифру.</span></label><button className="btn btn-ghost btn-sm" disabled={!!busy || !meaningfulReason(reasons[leader.id] ?? '')} onClick={() => void exclude(leader.id)}>Добавить исключение</button></div>}
+                {active.map(exemption => <div className="trigger-exemption" key={exemption.id}><span>{exemption.reason}</span>{!readOnly && exemption.canClear && <button className="btn btn-ghost btn-sm" disabled={!!busy} onClick={() => void clear(exemption.id)}>Снять исключение</button>}</div>)}
+                {!readOnly && !active.length && <div className="trigger-exemption-form"><label>Причина исключения для {leader.name}<input className="input" aria-label={'Причина исключения для ' + leader.name} maxLength={1000} value={reasons[leader.id] ?? ''} disabled={!!busy} onChange={event => setReasons(previous => ({ ...previous, [leader.id]: event.target.value }))} /><span className="helper-text">Не менее 3 символов, включая букву или цифру.</span></label><button className="btn btn-ghost btn-sm" disabled={!!busy || !meaningfulReason(reasons[leader.id] ?? '')} onClick={() => void exclude(leader.id)}>Добавить исключение</button></div>}
               </div>;
             })}
             <div className="trigger-checks">{shop.checks.map(check => <div key={check.code}>
@@ -183,7 +186,7 @@ export default function CityTriggersPage() {
             <p className="helper-text">Исключения сохраняются при переводе лидера или снятии назначения. Автор, COO или администратор может снять их вручную.</p>
             {otherExemptions.map(exemption => <div className="trigger-exemption" key={exemption.id}>
               <span><strong>{exemption.user?.name ?? `Лидер #${exemption.userId}`}</strong><br />{exemption.reason}</span>
-              {exemption.canClear && <button className="btn btn-ghost btn-sm" disabled={!!busy} onClick={() => void clear(exemption.id)}>Снять исключение</button>}
+              {!readOnly && exemption.canClear && <button className="btn btn-ghost btn-sm" disabled={!!busy} onClick={() => void clear(exemption.id)}>Снять исключение</button>}
             </div>)}
           </section>}
         </div>}

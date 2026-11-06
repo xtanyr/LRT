@@ -16,7 +16,7 @@ export class CitiesController {
   constructor(private readonly citiesService: CitiesService, private readonly access: AccessService) {}
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER)
+  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get all cities' })
   findAll(@GetUser() user: any, @Query('includeInactiveShops') includeInactiveShops?: string) {
     const global = this.access.global(user);
@@ -27,7 +27,7 @@ export class CitiesController {
   }
 
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER)
+  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get city by ID' })
   findOne(@Param('id') id: string, @GetUser() user: any) {
     this.access.requireCity(user, Number(id));

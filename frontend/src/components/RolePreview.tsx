@@ -7,6 +7,7 @@ const ROLES: { value: UserRole; label: string }[] = [
   { value: 'CITY_LEADER', label: 'Лидер города' },
   { value: 'COO', label: 'Операционный директор' },
   { value: 'ADMIN', label: 'Администратор' },
+  { value: 'VIEWER', label: 'Просмотр' },
 ];
 
 export default function RolePreview() {

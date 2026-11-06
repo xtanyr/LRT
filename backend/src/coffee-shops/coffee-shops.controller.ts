@@ -16,7 +16,7 @@ export class CoffeeShopsController {
   constructor(private readonly coffeeShopsService: CoffeeShopsService, private readonly access: AccessService) {}
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER, UserRole.LEADER)
+  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER, UserRole.LEADER, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get all coffee shops' })
   @ApiQuery({ name: 'cityId', required: false })
   findAll(@GetUser() user: any, @Query('cityId') cityId?: string) {
@@ -24,7 +24,7 @@ export class CoffeeShopsController {
   }
 
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER, UserRole.LEADER)
+  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER, UserRole.LEADER, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get coffee shop by ID' })
   async findOne(@Param('id') id: string, @GetUser() user: any) {
     await this.access.requireShop(user, Number(id));

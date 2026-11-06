@@ -17,14 +17,14 @@ export class MetricsController {
   constructor(private readonly metricsService: MetricsService) {}
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.LEADER, UserRole.CITY_LEADER)
+  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.LEADER, UserRole.CITY_LEADER, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get all metrics' })
   findAll() {
     return this.metricsService.findAll();
   }
 
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.LEADER, UserRole.CITY_LEADER)
+  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.LEADER, UserRole.CITY_LEADER, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get metric by ID' })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.metricsService.findOne(id);

@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
+import { AuthContext } from '../../types/auth';
 import { ReportDraftPayload, saveReportDraft, waitForReportDraftSave } from '../../services/report-draft-save';
 import { useReportExampleHelp } from '../../services/report-example-help';
 import { useRatingThresholds } from '../../services/rating-colors';
@@ -102,8 +103,10 @@ export default function LeaderReportPage() {
  const exampleParams=new URLSearchParams(params);
  exampleParams.set('period',period);
  if(shopId)exampleParams.set('shop',String(shopId));
+ const auth=useContext(AuthContext);
+ const viewerOnly=(auth?.viewAsRole||auth?.user?.role)==='VIEWER';
  const historical=Boolean(report?.isLocked||Date.now()>=Date.UTC(year,month,11,9));
- const locked=typeof report?.isEditable==='boolean'?!report.isEditable:!historicalEditingEnabled&&historical;
+ const locked=viewerOnly||(typeof report?.isEditable==='boolean'?!report.isEditable:!historicalEditingEnabled&&historical);
  const fieldDisabled=locked||(saving&&!automaticSaveInFlight.current);
  const activeMetrics=metrics.filter(metric=>metric.isActive!==false);
  const activeValues=report?.metricValues.filter(value=>activeMetrics.some(metric=>metric.id===value.metricId))||[];
@@ -170,21 +173,21 @@ export default function LeaderReportPage() {
   return zone==='TARGET'?' metric-zone-green':zone==='BELOW_TARGET'?' metric-zone-yellow':zone==='CRITICAL'?' metric-zone-red':'';
  };
  const input=(label:string,v:unknown,update:(s:string)=>void,className='')=><input className={'input'+className} aria-label={label} inputMode="decimal" value={String(v??'')} disabled={fieldDisabled} onChange={e=>update(e.target.value)}/>;
- const reportState=locked?'Исторический · только чтение':testEditing?'Исторический · тестовое редактирование':report?.status==='SUBMITTED'?'Заполнено':'Не заполнено';
- const saveStatus=visibleError?visibleError:autosaveState==='saving'?'Сохраняем изменения…':autosaveState==='waiting'?'Сохранение через 2 секунды':autosaveState==='saved'?'Все изменения сохранены':locked?'Редактирование закрыто':'Автосохранение включено';
+ const reportState=viewerOnly?'Только просмотр':locked?'Исторический · только чтение':testEditing?'Исторический · тестовое редактирование':report?.status==='SUBMITTED'?'Заполнено':'Не заполнено';
+ const saveStatus=visibleError?visibleError:autosaveState==='saving'?'Сохраняем изменения…':autosaveState==='waiting'?'Сохранение через 2 секунды':autosaveState==='saved'?'Все изменения сохранены':viewerOnly?'Режим просмотра':locked?'Редактирование закрыто':'Автосохранение включено';
  const activeAnalysisGroups=analysisSections.map(group=>({...group,questions:questions.filter(question=>question.section===group.section&&(question.questionKey!=='inventory_analysis'||inventoryAvailable)).sort((a,b)=>a.displayOrder-b.displayOrder)})).filter(group=>group.questions.length>0&&blockFor(group.section)===activeBlock);
  const activeQuestions=activeAnalysisGroups.flatMap(group=>group.questions);
  const answeredQuestions=activeQuestions.filter(question=>report?.analyses.some(answer=>answer.questionKey===question.questionKey&&answer.content.trim().length>=3)).length;
  return <div className="page leader-report">
-      <div className="page-header leader-report-header"><div><h1 className="page-title">Отчёт за {period}</h1><div className="leader-report-meta"><span className="badge">{reportState}</span><span className={'leader-save-status '+(visibleError?'is-error':autosaveState)} role={visibleError?'alert':'status'} aria-live="polite">{saveStatus}</span></div></div><div className="page-actions"><button className="btn btn-primary" disabled={!report||locked||saving} onClick={()=>save(true)}>Отправить отчёт</button></div></div>
-  <div className={'leader-report-example'+(exampleHelp.dismissed?' is-subtle':' is-prominent')}>
+      <div className="page-header leader-report-header"><div><h1 className="page-title">Отчёт за {period}</h1><div className="leader-report-meta"><span className="badge">{reportState}</span><span className={'leader-save-status '+(visibleError?'is-error':autosaveState)} role={visibleError?'alert':'status'} aria-live="polite">{saveStatus}</span></div></div>{!viewerOnly&&<div className="page-actions"><button className="btn btn-primary" disabled={!report||locked||saving} onClick={()=>save(true)}>Отправить отчёт</button></div>}</div>
+  {!viewerOnly&&<div className={'leader-report-example'+(exampleHelp.dismissed?' is-subtle':' is-prominent')}>
    {!exampleHelp.dismissed&&<div className="leader-report-help-copy"><strong>Заполняете отчёт впервые?</strong><p>Пройдите пример с подсказками для каждого показателя.</p></div>}
    <div className="leader-report-help-actions">
     <Link className={'leader-report-example-link'+(exampleHelp.dismissed?'':' btn btn-primary')} to={'/report-example?'+exampleParams.toString()} aria-disabled={dirty||saving||exampleHelp.saving} title={dirty||saving?'Дождитесь сохранения изменений':undefined} onClick={event=>{if(dirty||saving||exampleHelp.saving)event.preventDefault();}}>Пример заполнения отчёта</Link>
     {!exampleHelp.dismissed&&<button type="button" className="btn btn-ghost" disabled={!exampleHelp.canSave} onClick={()=>void exampleHelp.dismiss()}>Мне не нужна помощь</button>}
    </div>
    {exampleHelp.error&&<p className="leader-report-help-error" role="alert">{exampleHelp.error}</p>}
-  </div>
+  </div>}
   <div className="card leader-report-controls"><label><span>Кофейня</span><SelectControl label="Кофейня" value={shopId} disabled={dirty||saving} onChange={value=>setShopId(Number(value))} options={shops.map(s=>({value:s.id,label:s.name}))}/></label><label className="period-control"><span>Отчётный период</span><MonthPicker label="Период" value={period} disabled={dirty||saving} onChange={setPeriod}/></label><aside className="leader-deadline"><strong>{testEditing?'Тестовый режим':'Сроки отчёта'}</strong><span>{testEditing?'Редактирование прошлых месяцев открыто для проверки триггеров.':'Сдать до 10-го числа следующего месяца, 12:00 МСК. Редактирование открыто до конца следующего месяца.'}</span>{report?.submittedAt&&<span className="leader-submitted"><b>Отправлен</b>{new Date(report.submittedAt).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК</span>}</aside></div>
   {loading?<LoadingState variant="panel" label="Загружаем отчёт" />:!shops.length?<p>Нет доступных кофеен. Обратитесь к администратору для назначения.</p>:report&&<>
    <div className="report-section-toolbar"><div className="tabs">{blocks.map((label,index)=><button key={label} className={'tab'+(activeBlock===index?' active':'')} onClick={()=>setActiveBlock(index)}>{label}</button>)}</div><div className={'report-rating'+(report.score?.rating==null?'':report.score.rating>=ratingThresholds.green?' metric-zone-green':report.score.rating<=ratingThresholds.red?' metric-zone-red':' metric-zone-yellow')}><span>Рейтинг</span><strong>{dirty&&!negativeError?'…':report.score?.rating??'—'}</strong><small>{negativeError?'Последний сохранённый рейтинг':dirty?'Пересчитываем после сохранения':'из '+(report.score?.maxPoints??100)+' баллов'}</small></div></div>

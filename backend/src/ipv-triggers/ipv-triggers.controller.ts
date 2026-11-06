@@ -15,7 +15,7 @@ export class IpvTriggersController {
   constructor(private readonly ipvTriggersService: IpvTriggersService) {}
 
   @Get('config')
-  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER)
+  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get trigger configs' })
   getConfigs() {
     return this.ipvTriggersService.getTriggerConfigs();
@@ -29,14 +29,14 @@ export class IpvTriggersController {
   }
 
   @Get('statuses')
-  @Roles(UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get IPV statuses' })
   getStatuses(@GetUser() user: any, @Query('coffeeShopId') coffeeShopId?: string) {
     return this.ipvTriggersService.getIpvStatuses(user, coffeeShopId);
   }
 
   @Get('diagnostics')
-  @Roles(UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.VIEWER)
   @ApiOperation({ summary: 'Explain current trigger evaluation' })
   getDiagnostics(@GetUser() user: any, @Query('coffeeShopId') coffeeShopId?: string) {
     return this.ipvTriggersService.getDiagnostics(user, coffeeShopId);
@@ -71,7 +71,7 @@ export class IpvTriggersController {
   }
 
   @Get('exemptions')
-  @Roles(UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get exemptions' })
   getExemptions(@GetUser() user: any) {
     return this.ipvTriggersService.getExemptions(user);
