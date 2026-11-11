@@ -464,6 +464,22 @@ describe('LeaderReportPage', () => {
   await waitFor(()=>expect(api.post).toHaveBeenLastCalledWith('/reports/draft',expect.objectContaining({formData:{depositLink:''}})),{timeout:2500});
  });
 
+ it('treats the real deposit metric (code FREE_ACCESS) as the rubles field with a link', async () => {
+  vi.mocked(api.get).mockImplementation(async path => ({data:
+   path==='/metrics' ? [{id:1,name:'eNPS',code:'ENPS',unit:'%',section:'TEAM_GUESTS',displayOrder:1},{id:2,name:'Доля депозита в выручке',code:'FREE_ACCESS',unit:'%',section:'COSTING',displayOrder:2,isActive:true}] :
+   path==='/coffee-shops' ? [{id:7,name:'Тестовая кофейня'}] :
+   path==='/admin/analysis-questions' ? [] :
+   path==='/reports/editing-policy' ? {historicalEditingEnabled:false} :
+   {id:44,coffeeShopId:7,year:2026,month:9,revenue:1000,drinksCount:50,isEditable:true,metricValues:[],analyses:[],formData:{}}
+  }) as any);
+  render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
+  const amount=await screen.findByLabelText('Доля депозита в выручке');
+  const row=within(amount.closest('tr')!);
+  expect(row.getByText('Сумма депозита, ₽')).toBeInTheDocument();
+  expect(row.getByRole('textbox',{name:'Ссылка на депозит'})).toBeInTheDocument();
+  expect(amount).toHaveAttribute('placeholder','Сумма, ₽');
+ });
+
  it('autosaves the equipment and repair plan document URL with the report', async () => {
   render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
   fireEvent.click(await screen.findByRole('button',{name:'Расходы'}));
