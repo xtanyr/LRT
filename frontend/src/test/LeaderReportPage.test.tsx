@@ -193,7 +193,7 @@ describe('LeaderReportPage', () => {
   finishSave?.();
   await waitFor(()=>expect(screen.getByLabelText('eNPS')).toHaveValue('95'));
  });
- it('shows one gifts action-and-plan field and separate analysis fields for each expense article', async () => {
+ it('does not show the removed gifts section and shows separate analysis fields for each expense article', async () => {
   const questions = [
    {questionKey:'gifts_top_reasons',label:'Топ-5 причин за месяц',section:'GIFTS',displayOrder:1},
    {questionKey:'gifts_actions_plan',label:'Действия по устранению и план на месяц',section:'GIFTS',displayOrder:2},
@@ -215,11 +215,9 @@ describe('LeaderReportPage', () => {
   render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
 
   await screen.findByLabelText('eNPS');
-  fireEvent.click(screen.getByRole('button',{name:/Подарки/}));
-  expect(screen.getByRole('textbox',{name:/Топ-5 причин за месяц/})).toBeInTheDocument();
-  expect(screen.getByRole('textbox',{name:/Действия по устранению и план на месяц/})).toBeInTheDocument();
-  expect(screen.queryByLabelText('Действия по устранению')).not.toBeInTheDocument();
-  expect(screen.queryByLabelText('План на месяц')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:/Подарки/})).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Подарки, ₽')).not.toBeInTheDocument();
+  expect(screen.queryByRole('textbox',{name:/Топ-5 причин за месяц/})).not.toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button',{name:'Себестоимость'}));
   for (const [section,label] of [
@@ -415,23 +413,25 @@ describe('LeaderReportPage', () => {
   expect(screen.getByRole('heading',{name:'Учебный отчёт'})).toBeInTheDocument();
  });
 
- it('loads giftsLink beside the gifts metric and keeps the link available in a read-only report', async () => {
-  const url='https://example.org/gifts?month=2026-09';
+ const depositMetrics=[{id:1,name:'eNPS',code:'ENPS',unit:'%',section:'TEAM_GUESTS',displayOrder:1},{id:2,name:'Доля депозита в выручке',code:'DEPOSIT',unit:'%',section:'TEAM_GUESTS',displayOrder:2,isActive:true}];
+ it('loads depositLink beside the deposit metric and keeps the link available in a read-only report', async () => {
+  const url='https://example.org/deposit?month=2026-09';
   const equipmentUrl='https://example.org/equipment-plan?month=2026-09';
   vi.mocked(api.get).mockImplementation(async path => ({data:
-   path==='/metrics' ? [{id:1,name:'eNPS',code:'ENPS',unit:'%',section:'TEAM_GUESTS',displayOrder:1}] :
+   path==='/metrics' ? depositMetrics :
    path==='/coffee-shops' ? [{id:7,name:'Тестовая кофейня'}] :
    path==='/admin/analysis-questions' ? [] :
    path==='/reports/editing-policy' ? {historicalEditingEnabled:false} :
-   {id:44,coffeeShopId:7,year:2026,month:9,revenue:1000,drinksCount:50,isEditable:false,metricValues:[],analyses:[],formData:{giftsLink:url,equipmentLink:equipmentUrl}}
+   {id:44,coffeeShopId:7,year:2026,month:9,revenue:1000,drinksCount:50,isEditable:false,metricValues:[],analyses:[],formData:{depositLink:url,equipmentLink:equipmentUrl}}
   }) as any);
   render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
-  await screen.findByLabelText('Подарки, ₽');
-  const gifts=within(screen.getByLabelText('Подарки, ₽').closest('tr')!);
-  expect(gifts.getByRole('textbox',{name:'Ссылка на подарки'})).toHaveValue(url);
-  expect(gifts.getByRole('textbox',{name:'Ссылка на подарки'})).toBeDisabled();
-  expect(gifts.getByRole('link',{name:'Открыть ↗'})).toHaveAttribute('href',url);
-  expect(gifts.getByRole('link',{name:'Открыть ↗'})).toHaveAttribute('rel','noopener noreferrer');
+  await screen.findByLabelText('Доля депозита в выручке');
+  expect(screen.queryByLabelText('Подарки, ₽')).not.toBeInTheDocument();
+  const deposit=within(screen.getByLabelText('Доля депозита в выручке').closest('tr')!);
+  expect(deposit.getByRole('textbox',{name:'Ссылка на депозит'})).toHaveValue(url);
+  expect(deposit.getByRole('textbox',{name:'Ссылка на депозит'})).toBeDisabled();
+  expect(deposit.getByRole('link',{name:'Открыть ↗'})).toHaveAttribute('href',url);
+  expect(deposit.getByRole('link',{name:'Открыть ↗'})).toHaveAttribute('rel','noopener noreferrer');
   fireEvent.click(screen.getByRole('button',{name:'Расходы'}));
   const equipment=within(screen.getByLabelText('Оборудование, материалы, ремонт, ₽').closest('tr')!);
   expect(equipment.getByRole('textbox',{name:'Ссылка на план затрат на оборудование'})).toHaveValue(equipmentUrl);
@@ -439,24 +439,29 @@ describe('LeaderReportPage', () => {
   expect(equipment.getByRole('link',{name:'Открыть ↗'})).toHaveAttribute('href',equipmentUrl);
  });
 
- it('autosaves giftsLink with other gift values and supports clearing it', async () => {
+ it('autosaves depositLink with the report and supports clearing it', async () => {
+  vi.mocked(api.get).mockImplementation(async path => ({data:
+   path==='/metrics' ? depositMetrics :
+   path==='/coffee-shops' ? [{id:7,name:'Тестовая кофейня'}] :
+   path==='/admin/analysis-questions' ? [] :
+   path==='/reports/editing-policy' ? {historicalEditingEnabled:false} :
+   {id:44,coffeeShopId:7,year:2026,month:9,revenue:1000,drinksCount:50,isEditable:true,metricValues:[],analyses:[],formData:{}}
+  }) as any);
+  vi.mocked(api.post).mockImplementation(async (_url,body) => ({data:{id:44,coffeeShopId:7,year:2026,month:9,isEditable:true,...(body as object)}}) as any);
   render(<MemoryRouter><ToastProvider><LeaderReportPage/></ToastProvider></MemoryRouter>);
-  const amount=await screen.findByLabelText('Подарки, ₽');
-  const gifts=within(amount.closest('tr')!);
-  const link=gifts.getByRole('textbox',{name:'Ссылка на подарки'});
+  const amount=await screen.findByLabelText('Доля депозита в выручке');
+  const deposit=within(amount.closest('tr')!);
+  const link=deposit.getByRole('textbox',{name:'Ссылка на депозит'});
   expect(link).toHaveValue('');
-  const url='https://example.org/gifts?month=2026-09';
-  fireEvent.change(amount,{target:{value:'100'}});
+  const url='https://example.org/deposit?month=2026-09';
   fireEvent.change(link,{target:{value:url}});
-  await waitFor(()=>expect(api.post).toHaveBeenCalledWith('/reports/draft',expect.objectContaining({formData:{gifts:'100',giftsLink:url}})),{timeout:2500});
+  await waitFor(()=>expect(api.post).toHaveBeenCalledWith('/reports/draft',expect.objectContaining({formData:{depositLink:url}})),{timeout:2500});
   await waitFor(()=>expect(link).toBeEnabled());
   expect(link).toHaveValue(url);
-  expect(gifts.getByRole('link',{name:'Открыть ↗'})).toHaveAttribute('href',url);
+  expect(deposit.getByRole('link',{name:'Открыть ↗'})).toHaveAttribute('href',url);
   fireEvent.change(link,{target:{value:''}});
-  expect(gifts.queryByRole('link',{name:'Открыть ↗'})).not.toBeInTheDocument();
-  await waitFor(()=>expect(api.post).toHaveBeenLastCalledWith('/reports/draft',expect.objectContaining({formData:{gifts:'100',giftsLink:''}})),{timeout:2500});
-  await waitFor(()=>expect(link).toBeEnabled());
-  expect(link).toHaveValue('');
+  expect(deposit.queryByRole('link',{name:'Открыть ↗'})).not.toBeInTheDocument();
+  await waitFor(()=>expect(api.post).toHaveBeenLastCalledWith('/reports/draft',expect.objectContaining({formData:{depositLink:''}})),{timeout:2500});
  });
 
  it('autosaves the equipment and repair plan document URL with the report', async () => {
@@ -510,7 +515,7 @@ describe('LeaderReportPage', () => {
   ['Количество напитков','Labor Cost'],
   ['План выручки','Labor Cost'],
   ['План напитков','Labor Cost'],
-  ['План: Подарки, ₽','Команда и гости'],
+  ['План: Свободный доступ, ₽','Себестоимость'],
   ['Административные затраты, ₽','Расходы'],
   ['План: Оборудование, материалы, ремонт, ₽','Расходы'],
  ])('blocks negative numeric report field %s before submission', async (label,block) => {

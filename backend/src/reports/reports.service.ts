@@ -84,7 +84,7 @@ export class ReportsService {
     const formData: Record<string, number | string | null> = {};
     for (const [key, value] of Object.entries(data.formData || {})) {
       if (!/^[a-zA-Z][a-zA-Z0-9_]{0,79}$/.test(key)) throw new BadRequestException('Некорректное поле формы');
-      if (key === 'giftsLink' || key === 'equipmentLink') {
+      if (key === 'giftsLink' || key === 'equipmentLink' || key === 'depositLink') {
         if (value === '' || value === null) { formData[key] = null; continue; }
         try { const url = new URL(String(value)); if (!['http:', 'https:'].includes(url.protocol) || url.href.length > 2000) throw new Error(); formData[key] = url.href; }
         catch { throw new BadRequestException('Ссылка должна начинаться с https:// или http://'); }

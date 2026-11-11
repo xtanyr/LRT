@@ -22,7 +22,6 @@ const analysisSections: {section: string; title: string; hint: string}[] = [
  {section:'REVIEWS',title:'Отзывы',hint:'Корневые причины, устранение, профилактика и скорость разбора'},
  {section:'GUEST_EXPERIENCE',title:'Индекс гостевого опыта',hint:'Топ-3 проблемы, повторяющиеся ошибки и план'},
  {section:'STANDARDS',title:'Рейтинг стандартов',hint:'Топ-3 проблемы, повторяющиеся ошибки и план'},
- {section:'GIFTS',title:'Подарки',hint:'Причины, действия и план на месяц'},
  {section:'LABOR_COST',title:'Labor Cost и команда',hint:'LFL, выручка, производительность и команда'},
  {section:'COSTING',title:'Себестоимость',hint:'Причины отклонений и план действий'},
  {section:'DESSERT_WRITEOFF',title:'Списание десертов',hint:'Причины списаний и план сокращения'},
@@ -34,7 +33,6 @@ const analysisSections: {section: string; title: string; hint: string}[] = [
  {section:'SUMMARY',title:'Итоги месяца',hint:'Главные выводы и действия на следующий месяц'},
 ];
 const extras = [
-  {key:'gifts',label:'Подарки, ₽',block:0,hint:'Сумма подарков за месяц',share:true},
   {key:'personnelCosts',label:'Расходы на персонал, ₽',block:1,hint:'НДФЛ, ФСС, доставка, питание, корпоративные мероприятия, обучение, медосмотр, командировочные, страховые взносы, форма, прочие расходы',share:true},
   {key:'freeAccess',label:'Свободный доступ, ₽',block:2,hint:'Источник: финансовый дашборд',share:true},
   {key:'adminCosts',label:'Административные затраты, ₽',block:3,hint:'Связь, клининг, озеленение, хозматериалы, канцелярия, подбор персонала, консалтинг, IT, банки, прочие расходы',share:true},
@@ -75,7 +73,7 @@ const negativeValueMessage = (report:Report,metrics:Metric[]):string => {
  extras.forEach(extra=>{labels[extra.key]=extra.label;labels[extra.key+'Plan']='План: '+extra.label;});
  const fields:[string,unknown][]=[['Выручка',report.revenue],['Количество напитков',report.drinksCount],
   ...report.metricValues.map((value):[string,unknown]=>[metrics.find(metric=>metric.id===value.metricId)?.name||'Показатель',value.absoluteValue]),
-  ...Object.entries(report.formData||{}).filter(([key])=>!['giftsLink','equipmentLink'].includes(key)).map(([key,value]):[string,unknown]=>[labels[key]||key,value])];
+  ...Object.entries(report.formData||{}).filter(([key])=>!['giftsLink','equipmentLink','depositLink'].includes(key)).map(([key,value]):[string,unknown]=>[labels[key]||key,value])];
  const negative=fields.find(([,value])=>typeof value==='number'?value<0:typeof value==='string'&&Number(value.replace(/\s/g,'').replace(/[₽$€£]$/,'').replace(',','.'))<0);
  return negative?negative[0]+': значение не может быть отрицательным.':'';
 };
@@ -172,7 +170,7 @@ export default function LeaderReportPage() {
   const zone=report?.score?.results?.find(result=>result.metricId===metricId)?.zone;
   return zone==='TARGET'?' metric-zone-green':zone==='BELOW_TARGET'?' metric-zone-yellow':zone==='CRITICAL'?' metric-zone-red':'';
  };
- const input=(label:string,v:unknown,update:(s:string)=>void,className='')=><input className={'input'+className} aria-label={label} inputMode="decimal" value={String(v??'')} disabled={fieldDisabled} onChange={e=>update(e.target.value)}/>;
+ const input=(label:string,v:unknown,update:(s:string)=>void,className='',placeholder?:string)=><input className={'input'+className} aria-label={label} placeholder={placeholder} inputMode="decimal" value={String(v??'')} disabled={fieldDisabled} onChange={e=>update(e.target.value)}/>;
  const reportState=viewerOnly?'Только просмотр':locked?'Исторический · только чтение':testEditing?'Исторический · тестовое редактирование':report?.status==='SUBMITTED'?'Заполнено':'Не заполнено';
  const saveStatus=visibleError?visibleError:autosaveState==='saving'?'Сохраняем изменения…':autosaveState==='waiting'?'Сохранение через 2 секунды':autosaveState==='saved'?'Все изменения сохранены':viewerOnly?'Режим просмотра':locked?'Редактирование закрыто':'Автосохранение включено';
  const activeAnalysisGroups=analysisSections.map(group=>({...group,questions:questions.filter(question=>question.section===group.section&&(question.questionKey!=='inventory_analysis'||inventoryAvailable)).sort((a,b)=>a.displayOrder-b.displayOrder)})).filter(group=>group.questions.length>0&&blockFor(group.section)===activeBlock);
@@ -195,9 +193,11 @@ export default function LeaderReportPage() {
    {activeBlock!==4&&<div className="card table-wrap"><table className="table"><thead><tr><th>Показатель</th><th>Предыдущий факт</th><th>Текущий факт</th><th>План следующего месяца</th></tr></thead><tbody>
     {visibleMetrics.filter(m=>(['FREE_ACCESS','DEPOSIT'].includes(m.code)?0:blockFor(m.section||m.code))===activeBlock).sort((a,b)=>a.displayOrder-b.displayOrder).map(m=>{
      const share=['LABOR_COST','FREE_ACCESS','DEPOSIT','DESSERT_WRITEOFF','PRODUCT_WRITEOFF'].includes(m.code);
-     return <tr key={m.id}><td><span className="report-metric-label">{m.name}</span><div className="helper-text">{share?'Сумма, ₽; доля от выручки автоматически':m.unit}</div></td><td>{value(previous,m.id)===''?'—':value(previous,m.id)}</td><td>{input(m.name,value(report,m.id),v=>change(r=>({...r,metricValues:[...r.metricValues.filter(x=>x.metricId!==m.id),{metricId:m.id,absoluteValue:v}]})),metricClass(m.id))}</td><td>{input('План: '+m.name,report.formData?.['metricPlan_'+m.id],v=>field('metricPlan_'+m.id,v))}</td></tr>;
+     const ph=share?'Сумма, ₽':undefined;
+     const depositNumber=m.code==='DEPOSIT'?numericInputValue(value(report,m.id)):null;
+     return <tr key={m.id}><td><span className="report-metric-label">{m.code==='DEPOSIT'?'Сумма депозита, ₽':m.name}</span><div className="helper-text">{share?'Введите сумму в рублях, а не процент. Долю от выручки сервис рассчитает сам.':m.unit}</div>{depositNumber!==null&&depositNumber>0&&depositNumber<100&&<div className="helper-text" role="note" style={{color:'var(--color-warning, #b45309)'}}>Похоже, вы ввели процент. Нужна сумма депозита в рублях, например 40 000.</div>}{m.code==='DEPOSIT'&&<ReportDocumentLink label="Документ" ariaLabel="Ссылка на депозит" value={report.formData?.depositLink} disabled={fieldDisabled} onChange={value=>field('depositLink',value)}/>}</td><td>{value(previous,m.id)===''?'—':value(previous,m.id)}</td><td>{input(m.name,value(report,m.id),v=>change(r=>({...r,metricValues:[...r.metricValues.filter(x=>x.metricId!==m.id),{metricId:m.id,absoluteValue:v}]})),metricClass(m.id),ph)}</td><td>{input('План: '+m.name,report.formData?.['metricPlan_'+m.id],v=>field('metricPlan_'+m.id,v),'',ph)}</td></tr>;
     })}
-   {extras.filter(f=>f.block===activeBlock).map(f=><tr key={f.key}><td><span className="report-metric-label">{f.label}</span><div className="helper-text">{f.hint}</div>{f.key==='gifts'&&<ReportDocumentLink label="Документ" ariaLabel="Ссылка на подарки" value={report.formData?.giftsLink} disabled={fieldDisabled} onChange={value=>field('giftsLink',value)}/>}{f.key==='equipment'&&<ReportDocumentLink label="План затрат" ariaLabel="Ссылка на план затрат на оборудование" value={report.formData?.equipmentLink} disabled={fieldDisabled} onChange={value=>field('equipmentLink',value)}/>}</td><td>{previous?.formData?.[f.key]??'—'}</td><td>{input(f.label,report.formData?.[f.key],v=>field(f.key,v))}</td><td>{input('План: '+f.label,report.formData?.[f.key+'Plan'],v=>field(f.key+'Plan',v))}</td></tr>)}
+   {extras.filter(f=>f.block===activeBlock).map(f=><tr key={f.key}><td><span className="report-metric-label">{f.label}</span><div className="helper-text">{f.hint}</div>{f.key==='equipment'&&<ReportDocumentLink label="План затрат" ariaLabel="Ссылка на план затрат на оборудование" value={report.formData?.equipmentLink} disabled={fieldDisabled} onChange={value=>field('equipmentLink',value)}/>}</td><td>{previous?.formData?.[f.key]??'—'}</td><td>{input(f.label,report.formData?.[f.key],v=>field(f.key,v))}</td><td>{input('План: '+f.label,report.formData?.[f.key+'Plan'],v=>field(f.key+'Plan',v))}</td></tr>)}
    </tbody></table></div>}
    {activeBlock===2&&<aside className="inventory-availability-note" role="note">Инвентаризация пока доступна только для кофеен Омска и Новосибирска.</aside>}
    {activeBlock===2&&inventoryAvailable&&<section className="card inventory-card" aria-labelledby="inventory-title"><div className="inventory-card-heading"><div><h2 id="inventory-title" className="card-title">Инвентаризация</h2><p>Введите суммы в рублях. Доли от выручки рассчитаются автоматически.</p></div></div><div className="inventory-grid"><div className="inventory-field"><label><span>Сумма излишков, ₽</span>{input('Сумма излишков, ₽',report.formData?.inventorySurplus,v=>field('inventorySurplus',v))}</label><div className="inventory-share"><span>Доля излишков от выручки</span><strong className="inventory-share-value">{revenuePercentage(report.formData?.inventorySurplus,report.revenue)===null?'—':revenuePercentage(report.formData?.inventorySurplus,report.revenue)+'%'}</strong></div></div><div className="inventory-field"><label><span>Сумма недостач, ₽</span>{input('Сумма недостач, ₽',report.formData?.inventoryShortage,v=>field('inventoryShortage',v))}</label><div className="inventory-share"><span>Доля недостач от выручки</span><strong className="inventory-share-value">{revenuePercentage(report.formData?.inventoryShortage,report.revenue)===null?'—':revenuePercentage(report.formData?.inventoryShortage,report.revenue)+'%'}</strong></div></div></div></section>}

@@ -33,10 +33,10 @@ describe('Report example walkthrough', () => {
     renderExample();
 
     fireEvent.click(screen.getByRole('button', { name: 'Шаг примера' }));
-    expect(screen.getAllByRole('option')).toHaveLength(20);
-    fireEvent.click(screen.getByRole('option', { name: '20. Проверка и отправка' }));
+    expect(screen.getAllByRole('option')).toHaveLength(19);
+    fireEvent.click(screen.getByRole('option', { name: '19. Проверка и отправка' }));
     expect(screen.getByRole('region', { name: 'Проверка и отправка' })).toBeInTheDocument();
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '20');
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '19');
     expect(screen.getAllByRole('region')).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('button', { name: 'Шаг примера' }));
@@ -64,36 +64,31 @@ describe('Report example walkthrough', () => {
     expect(within(reviews).getByText('4,7')).toBeInTheDocument();
   });
 
-  it('teaches one combined gifts plan and separate analysis for each expense article', () => {
+  it('teaches separate analysis for each expense article and has no gifts step', () => {
     renderExample();
     fireEvent.click(screen.getByRole('button', { name: 'Шаг примера' }));
-    fireEvent.click(screen.getByRole('option', { name: '7. Подарки' }));
-    const gifts = screen.getByRole('region', { name: 'Подарки' });
-    expect(gifts).toHaveTextContent('Действия по устранению и план на месяц');
-    expect(within(gifts).queryByText('План на месяц', { exact: true })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Шаг примера' }));
-    fireEvent.click(screen.getByRole('option', { name: '12. Свободный доступ' }));
+    expect(screen.queryByRole('option', { name: /Подарки/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('option', { name: '11. Свободный доступ' }));
     expect(screen.getByRole('region', { name: 'Свободный доступ' })).toHaveTextContent('Свободный доступ: расходы и план');
 
     fireEvent.click(screen.getByRole('button', { name: 'Шаг примера' }));
-    fireEvent.click(screen.getByRole('option', { name: '14. Списание десертов' }));
+    fireEvent.click(screen.getByRole('option', { name: '13. Списание десертов' }));
     expect(screen.getByRole('region', { name: 'Списание десертов' })).toHaveTextContent('Списания десертов: причины и план');
 
     fireEvent.click(screen.getByRole('button', { name: 'Шаг примера' }));
-    fireEvent.click(screen.getByRole('option', { name: '15. Списание продуктов' }));
+    fireEvent.click(screen.getByRole('option', { name: '14. Списание продуктов' }));
     expect(screen.getByRole('region', { name: 'Списание продуктов' })).toHaveTextContent('Списания продуктов: причины и план');
 
     fireEvent.click(screen.getByRole('button', { name: 'Шаг примера' }));
-    fireEvent.click(screen.getByRole('option', { name: '16. Административные затраты' }));
+    fireEvent.click(screen.getByRole('option', { name: '15. Административные затраты' }));
     expect(screen.getByRole('region', { name: 'Административные затраты' })).toHaveTextContent('Административные затраты: причины и план');
 
     fireEvent.click(screen.getByRole('button', { name: 'Шаг примера' }));
-    fireEvent.click(screen.getByRole('option', { name: '17. Аренда' }));
+    fireEvent.click(screen.getByRole('option', { name: '16. Аренда' }));
     expect(screen.getByRole('region', { name: 'Аренда' })).toHaveTextContent('Аренда: причины и план');
 
     fireEvent.click(screen.getByRole('button', { name: 'Шаг примера' }));
-    fireEvent.click(screen.getByRole('option', { name: '18. Оборудование, материалы и ремонт' }));
+    fireEvent.click(screen.getByRole('option', { name: '17. Оборудование, материалы и ремонт' }));
     const equipment = screen.getByRole('region', { name: 'Оборудование, материалы и ремонт' });
     expect(equipment).toHaveTextContent('Оборудование: анализ и план');
     expect(equipment).toHaveTextContent('Материалы: анализ и план');
@@ -103,7 +98,7 @@ describe('Report example walkthrough', () => {
   it('shows the inventory fields and calculated shares in its cost example step', () => {
     renderExample();
     fireEvent.click(screen.getByRole('button', { name: 'Шаг примера' }));
-    fireEvent.click(screen.getByRole('option', { name: '13. Инвентаризация' }));
+    fireEvent.click(screen.getByRole('option', { name: '12. Инвентаризация' }));
     const inventory = screen.getByRole('region', { name: 'Инвентаризация' });
     expect(inventory).toHaveTextContent('Сумма излишков, ₽');
     expect(inventory).toHaveTextContent('Сумма недостач, ₽');
