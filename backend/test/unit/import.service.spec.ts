@@ -63,11 +63,12 @@ const validPayload = {
   }],
 };
 
-function fakePrisma(existing: Array<{ id: number; year: number; month: number; isLocked: boolean }> = []) {
+function fakePrisma(existing: Array<{ id: number; year: number; month: number; isLocked: boolean }> = [], leaderIds: number[] = []) {
   const created: any[] = [];
   const updated: any[] = [];
   const tx = {
     configChangeLog: { create: jest.fn().mockResolvedValue({}) },
+    userCoffeeShopAssignment: { findMany: jest.fn(async () => leaderIds.map((userId) => ({ userId }))) },
     monthlyReport: {
       findMany: async () => existing,
       create: async (args: any) => {
@@ -103,7 +104,7 @@ describe('ImportService.confirmImport', () => {
       month: 12,
       status: 'SUBMITTED',
       isLocked: true,
-      submittedById: 42,
+      submittedById: null,
       ratingSnapshot: {
         rating: 21.5,
         totalPoints: 21.5,
@@ -120,6 +121,16 @@ describe('ImportService.confirmImport', () => {
       absoluteValue: expect.anything(),
       computedPercent: expect.anything(),
     });
+  });
+
+  it('never makes the importing admin the report author', async () => {
+    const single = fakePrisma([], [13]);
+    await new ImportService(single as any).confirmImport(validPayload, 42);
+    expect(single.created[0].submittedById).toBe(13);
+
+    const several = fakePrisma([], [13, 14]);
+    await new ImportService(several as any).confirmImport(validPayload, 42);
+    expect(several.created[0].submittedById).toBeNull();
   });
 
   it('refuses existing reports by default and always refuses locked reports', async () => {

@@ -278,6 +278,20 @@ export class ImportService {
       }
       const existingByPeriod = new Map(existing.map((report) => [`${report.year}-${report.month}`, report]));
       const imported: Array<{ year: number; month: number; reportId: number }> = [];
+      // The importing admin is not the author of a historical report (the import itself is audited in
+      // configChangeLog). The report is attributed to the shop's leader when exactly one is assigned.
+      const now = new Date();
+      const leaderAssignments = await tx.userCoffeeShopAssignment.findMany({
+        where: {
+          coffeeShopId: data.coffeeShopId,
+          assignedFrom: { lte: now },
+          OR: [{ assignedUntil: null }, { assignedUntil: { gt: now } }],
+          user: { role: 'LEADER' },
+        },
+        select: { userId: true },
+      });
+      const leaderIds = [...new Set(leaderAssignments.map((assignment: { userId: number }) => assignment.userId))];
+      const submittedById = leaderIds.length === 1 ? leaderIds[0] : null;
       for (const period of periods) {
         const metricValues = period.rows.map((row) => ({
           metricId: Number(row.metricId),
@@ -296,7 +310,7 @@ export class ImportService {
           status: 'SUBMITTED' as const,
           isLocked: true,
           submittedAt: new Date(),
-          submittedById: userId,
+          submittedById,
           formData: buildFormData(period, sourceFile),
           ratingSnapshot: buildRatingSnapshot(period, sourceFile),
         };
