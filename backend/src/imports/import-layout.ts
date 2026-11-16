@@ -326,29 +326,126 @@ function detectReportPeriod(sheetName: string) {
   return detected;
 }
 
-function formCellValue(sheet: XLSX.WorkSheet, templateSheet: XLSX.WorkSheet | undefined, address: string) {
+/** Section headings of a report sheet (column B) with their row in the original template. */
+const REPORT_SECTIONS: Array<{ templateRow: number; matches: (text: string) => boolean }> = [
+  { templateRow: 3, matches: (text) => text.startsWith('индекс счастья') },
+  { templateRow: 7, matches: (text) => text.startsWith('индекс гостевого опыта') },
+  { templateRow: 11, matches: (text) => text === 'подарки' },
+  { templateRow: 16, matches: (text) => text === 'фот' },
+  { templateRow: 22, matches: (text) => text.startsWith('расходы на персонал') },
+  { templateRow: 29, matches: (text) => text.startsWith('свободный доступ') },
+  { templateRow: 38, matches: (text) => text.startsWith('списание десертов') },
+  { templateRow: 47, matches: (text) => text.startsWith('списание продуктов') },
+  { templateRow: 56, matches: (text) => text.startsWith('административные затраты') },
+  { templateRow: 60, matches: (text) => text === 'аренда' },
+  { templateRow: 64, matches: (text) => text.startsWith('оборудование') },
+  { templateRow: 70, matches: (text) => text.startsWith('итоги месяца') },
+];
+
+const isAmountLabel = (text: string) => text === 'сумма';
+const isShareLabel = (text: string) => text.includes('от выручки');
+const isWriteoffLabel = (text: string) => text === 'списание';
+
+/** Rows inside a section that carry their own label in column B, by template row. */
+const REPORT_ROW_LABELS: Record<number, (text: string) => boolean> = {
+  13: isAmountLabel, 14: isShareLabel,
+  18: (text) => text === 'выручка', 19: (text) => text === 'зп', 20: isShareLabel, 21: (text) => text.startsWith('производительность'),
+  24: isAmountLabel, 25: isShareLabel,
+  31: isAmountLabel, 32: isShareLabel,
+  40: isWriteoffLabel, 41: isShareLabel,
+  49: isWriteoffLabel, 50: isShareLabel,
+  58: isAmountLabel, 59: isShareLabel,
+  62: isAmountLabel, 63: isShareLabel,
+  66: isAmountLabel, 67: isShareLabel,
+};
+
+interface ReportLayout {
+  /** Maps a cell address of the original template («D18») to the same cell of this sheet. */
+  at: (templateAddress: string) => string;
+  shifted: boolean;
+}
+
+/**
+ * Leaders insert and delete rows in their monthly sheets, so every cell is located through the
+ * section heading and row label in column B. A sheet that matches the template maps to itself.
+ */
+function resolveReportLayout(sheet: XLSX.WorkSheet): ReportLayout {
+  const lastRow = Math.min(sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']).e.r + 1 : 0, 400);
+  const labels: string[] = [];
+  for (let row = 1; row <= lastRow; row += 1) {
+    labels[row] = normalize(String((sheet[`B${row}`] as XLSX.CellObject | undefined)?.v ?? ''));
+  }
+  const anchors: Array<{ templateRow: number; row: number; found: boolean }> = [];
+  let searchFrom = 1;
+  let shift = 0;
+  for (const section of REPORT_SECTIONS) {
+    let row: number | undefined;
+    for (let candidate = searchFrom; candidate <= lastRow; candidate += 1) {
+      if (labels[candidate] && section.matches(labels[candidate])) { row = candidate; break; }
+    }
+    if (row != null) {
+      shift = row - section.templateRow;
+      searchFrom = row + 1;
+    }
+    anchors.push({ templateRow: section.templateRow, row: row ?? section.templateRow + shift, found: row != null });
+  }
+  const cache = new Map<number, number>();
+  const rowFor = (templateRow: number) => {
+    const cached = cache.get(templateRow);
+    if (cached != null) return cached;
+    let index = -1;
+    anchors.forEach((anchor, position) => { if (anchor.templateRow <= templateRow) index = position; });
+    let row = templateRow;
+    if (index >= 0) {
+      const anchor = anchors[index];
+      row = anchor.row + (templateRow - anchor.templateRow);
+      const matches = REPORT_ROW_LABELS[templateRow];
+      if (matches && anchor.found) {
+        const next = anchors.slice(index + 1).find((candidate) => candidate.found);
+        const end = Math.min(next ? next.row - 1 : anchor.row + 25, lastRow);
+        // Rows sharing a label («сумма» → «% от выручки») keep their template order within the section.
+        const from = templateRow > anchor.templateRow + 1 && REPORT_ROW_LABELS[templateRow - 1]
+          ? rowFor(templateRow - 1) + 1
+          : anchor.row + 1;
+        for (let candidate = from; candidate <= end; candidate += 1) {
+          if (labels[candidate] && matches(labels[candidate])) { row = candidate; break; }
+        }
+      }
+    }
+    cache.set(templateRow, row);
+    return row;
+  };
+  const at = (templateAddress: string) => {
+    const match = /^([A-Z]+)(\d+)$/.exec(templateAddress);
+    return match ? `${match[1]}${rowFor(Number(match[2]))}` : templateAddress;
+  };
+  const shifted = FORM_FIELD_MAPPINGS.some(([, , address]) => at(address) !== address);
+  return { at, shifted };
+}
+
+function formCellValue(sheet: XLSX.WorkSheet, templateSheet: XLSX.WorkSheet | undefined, address: string, templateAddress: string) {
   const value = (sheet[address] as XLSX.CellObject | undefined)?.v;
   if (value == null || typeof value === 'object') return null;
   if (typeof value === 'string') {
     // «%», blank strings and prompts left exactly as in the template sheet are not answers.
     const text = normalize(value);
-    const template = (templateSheet?.[address] as XLSX.CellObject | undefined)?.v;
+    const template = (templateSheet?.[templateAddress] as XLSX.CellObject | undefined)?.v;
     if (text === '' || (typeof template === 'string' && normalize(template) === text)) return null;
   }
   return value as string | number | boolean;
 }
 
-function extractFormData(sheet: XLSX.WorkSheet, sheetName: string, templateSheet?: XLSX.WorkSheet): HistoricalFormData {
+function extractFormData(sheet: XLSX.WorkSheet, sheetName: string, layout: ReportLayout, templateSheet?: XLSX.WorkSheet): HistoricalFormData {
   return {
     sourceSheet: sheetName,
     fields: FORM_FIELD_MAPPINGS.map(([key, label, primaryAddress]) => {
-      let address: string = primaryAddress;
-      let value = formCellValue(sheet, templateSheet, address);
+      let address = layout.at(primaryAddress);
+      let value = formCellValue(sheet, templateSheet, address, primaryAddress);
       const fallbackAddress = FORM_FIELD_FALLBACK_CELLS[key];
       if (value == null && fallbackAddress) {
-        const fallback = formCellValue(sheet, templateSheet, fallbackAddress);
+        const fallback = formCellValue(sheet, templateSheet, layout.at(fallbackAddress), fallbackAddress);
         if (fallback != null) {
-          address = fallbackAddress;
+          address = layout.at(fallbackAddress);
           value = fallback;
         }
       }
@@ -374,14 +471,24 @@ export function buildHistoricalPreview(
   const sourceSheetName = workbook.SheetNames.find((name) => normalize(name) === 'метрики');
   if (!sourceSheetName) throw new Error('В книге нет листа «Метрики»');
   const sourceSheet = workbook.Sheets[sourceSheetName];
-  const reportSheets = new Map<string, { name: string; sheet: XLSX.WorkSheet }>();
+  const reportSheets = new Map<string, { name: string; sheet: XLSX.WorkSheet; layout: ReportLayout }>();
+  const duplicateSheets: string[] = [];
   const templateSheetName = workbook.SheetNames.find((name) => normalize(name).includes('шаблон'));
   const templateSheet = templateSheetName ? workbook.Sheets[templateSheetName] : undefined;
   const layout = resolveMasterLayout(sourceSheet);
   for (const name of workbook.SheetNames) {
     if (name === sourceSheetName || normalize(name).includes('шаблон')) continue;
     const detected = detectReportPeriod(name);
-    if (detected.year && detected.month) reportSheets.set(`${detected.year}-${detected.month}`, { name, sheet: workbook.Sheets[name] });
+    if (!detected.year || !detected.month) continue;
+    const key = `${detected.year}-${detected.month}`;
+    const existing = reportSheets.get(key);
+    // Copies such as «июнь 2026 (Николай)» lose to the plainly named sheet of the same month.
+    if (existing) {
+      const keepExisting = existing.name.trim().length <= name.trim().length;
+      duplicateSheets.push(`«${existing.name.trim()}» и «${name.trim()}» — использован «${(keepExisting ? existing.name : name).trim()}»`);
+      if (keepExisting) continue;
+    }
+    reportSheets.set(key, { name, sheet: workbook.Sheets[name], layout: resolveReportLayout(workbook.Sheets[name]) });
   }
 
   const warnings = [
@@ -389,6 +496,11 @@ export function buildHistoricalPreview(
   ];
   const reviewRating = metrics.find((metric) => metric.code === 'REVIEW_RATING');
   if (reviewRating) warnings.push(`Текущая метрика ${reviewRating.code} отсутствует в историческом шаблоне и не получает критическую зону.`);
+  if (duplicateSheets.length > 0) warnings.push(`На один месяц найдено несколько листов: ${duplicateSheets.join('; ')}.`);
+  const shiftedSheets = [...reportSheets.values()].filter((entry) => entry.layout.shifted).map((entry) => `«${entry.name.trim()}»`);
+  if (shiftedSheets.length > 0) {
+    warnings.push(`В листах ${shiftedSheets.join(', ')} строки сдвинуты относительно шаблона: ячейки найдены по названиям разделов. Сверьте значения с исходником.`);
+  }
   if (layout.moved) {
     warnings.push(`Раскладка листа «${sourceSheetName}» отличается от шаблона: строки найдены по названиям (напитки — строка ${layout.drinksRow}, итоговый рейтинг — строка ${layout.ratingRow}). Сверьте значения с исходником.`);
   }
@@ -399,18 +511,18 @@ export function buildHistoricalPreview(
     const drinks = readNumber(sourceSheet, sourceSheetName, drinksAddress, false);
     if (drinks.issue) issues.push({ ...drinks.issue, field: 'drinksCount' });
     const reportSheet = period.year ? reportSheets.get(`${period.year}-${period.month}`) : undefined;
-    const formData = reportSheet ? extractFormData(reportSheet.sheet, reportSheet.name, templateSheet) : null;
+    const formData = reportSheet ? extractFormData(reportSheet.sheet, reportSheet.name, reportSheet.layout, templateSheet) : null;
     // No sheet for this month: the next month's report repeats it in the «previous month» column C.
     const nextSheet = !reportSheet && period.year
       ? reportSheets.get(period.month === 12 ? `${period.year + 1}-1` : `${period.year}-${period.month + 1}`)
       : undefined;
     const previousColumnSheet = nextSheet
-      && monthFromHeader((nextSheet.sheet.C17 as XLSX.CellObject | undefined)?.v) === period.month
+      && monthFromHeader((nextSheet.sheet[nextSheet.layout.at('C17')] as XLSX.CellObject | undefined)?.v) === period.month
       ? nextSheet
       : undefined;
     const amountSheet = reportSheet ?? previousColumnSheet;
     const amountColumn = reportSheet ? 'D' : 'C';
-    const revenueAddress = `${amountColumn}18`;
+    const revenueAddress = amountSheet ? amountSheet.layout.at(`${amountColumn}18`) : `${amountColumn}18`;
     const revenue = amountSheet
       ? readNumber(amountSheet.sheet, amountSheet.name, revenueAddress, false)
       : { value: null, raw: '' };
@@ -464,8 +576,17 @@ export function buildHistoricalPreview(
               ? 49
               : undefined;
         if (amountRow) {
-          const amount = readNumber(amountSheet.sheet, amountSheet.name, `${amountColumn}${amountRow}`, false);
-          if (amount.issue) issues.push({ ...amount.issue, field: 'absoluteValue', code: definition.codes[0] });
+          const amount = readNumber(amountSheet.sheet, amountSheet.name, amountSheet.layout.at(`${amountColumn}${amountRow}`), false);
+          // The rouble amount only complements the share taken from «Метрики»: unreadable text is skipped, not fatal.
+          if (amount.issue) {
+            issues.push({
+              ...amount.issue,
+              severity: 'warning',
+              field: 'absoluteValue',
+              code: definition.codes[0],
+              message: `${amount.issue.message} — сумма в рублях не импортируется, доля из листа «${sourceSheetName}» сохранена.`,
+            });
+          }
           if (amount.value != null) absoluteValue = amount.value;
         }
       }

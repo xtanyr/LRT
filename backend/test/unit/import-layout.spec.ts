@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { buildHistoricalPreview } from '../../src/imports/import-layout';
-import { decodeUploadFileName } from '../../src/imports/import.parser';
+import { cleanNumericString, decodeUploadFileName } from '../../src/imports/import.parser';
 
 const metrics = [
   { id: 1, code: 'ENPS', name: 'eNPS', unit: '%' },
@@ -210,6 +210,100 @@ describe('buildHistoricalPreview on real-world workbook quirks', () => {
     expect(field(preview, 1, 'reviewsAnalysis')?.value).toBe('1. Перечень корневых причин: холодный кофе');
     expect(field(preview, 1, 'guestExperienceAnalysis')).toMatchObject({ value: 'Пыль на поверхностях', sourceCell: 'январь 26!D10' });
     expect(field(preview, 1, 'personnelCostsAnalysis')).toMatchObject({ value: 'Сменили обувь по новому стандарту', sourceCell: 'январь 26!F24' });
+  });
+});
+
+describe('buildHistoricalPreview on report sheets with moved rows', () => {
+  const text = (value: string): XLSX.CellObject => ({ t: 's', v: value });
+  const number = (value: number): XLSX.CellObject => ({ t: 'n', v: value });
+
+  /** A January sheet shaped like a leader's edited copy: two extra rows on top, three more before «списание десертов». */
+  function shiftedWorkbook() {
+    const workbook = fixture();
+    const rows: unknown[][] = [];
+    rows[0] = ['', 'месяц', 'декабрь', 'январь'];
+    rows[1] = ['', 'выручка', 111, 222];
+    rows[4] = ['', 'индекс счастья', '', 'инпс', '', 'отзывы'];
+    rows[6] = ['', '', 0.99, '', 1, '', 4.8];
+    rows[7] = ['', 'Команда в порядке'];
+    rows[17] = ['', 'ФОТ'];
+    rows[18] = ['', 'месяц', 'декабрь', 'январь', 'февраль (план)', 'анализ'];
+    rows[19] = ['', 'выручка', 400000, '500 000р', '', 'Выручка выросла'];
+    rows[20] = ['', 'зп', 44000, 55000];
+    rows[21] = ['', '% от выручки', 0.11, 0.11];
+    rows[22] = ['', 'производительность', 8, 8.5];
+    rows[42] = ['', 'списание десертов'];
+    rows[43] = ['', 'месяц', 'декабрь', 'январь'];
+    rows[44] = ['', 'списание', 3000, 'добавлю позже'];
+    rows[45] = ['', '% от выручки', 0.008, 0.009];
+    rows[51] = ['', 'списание продуктов'];
+    rows[52] = ['', 'месяц', 'декабрь', 'январь'];
+    rows[53] = ['', 'списание', 2500, 5000];
+    workbook.Sheets['январь 26'] = XLSX.utils.aoa_to_sheet(rows);
+    return workbook;
+  }
+
+  it('locates revenue, amounts and form fields through section headings', () => {
+    const preview = buildHistoricalPreview(shiftedWorkbook(), metrics, 'synthetic-history.xlsx');
+    const january = preview.periods[1];
+    const field = (key: string) => january.formData?.fields.find((item) => item.key === key);
+
+    expect(january).toMatchObject({ revenue: 500000, selected: true });
+    expect(january.rows.find((row) => row.code === 'LABOR_COST')).toMatchObject({ absoluteValue: 55000, computedPercent: 12 });
+    expect(january.rows.find((row) => row.code === 'PRODUCT_WRITEOFF')).toMatchObject({ absoluteValue: 5000 });
+    expect(field('revenue')).toMatchObject({ sourceCell: 'январь 26!D20' });
+    expect(field('laborAnalysis')).toMatchObject({ value: 'Выручка выросла', sourceCell: 'январь 26!F20' });
+    expect(field('happinessIndex')).toMatchObject({ value: 0.99, sourceCell: 'январь 26!C7' });
+    expect(field('happinessAnalysis')).toMatchObject({ value: 'Команда в порядке', sourceCell: 'январь 26!B8' });
+    expect(preview.warnings.join(' ')).toContain('строки сдвинуты');
+  });
+
+  it('keeps the period importable when a rouble amount is unreadable text', () => {
+    const january = buildHistoricalPreview(shiftedWorkbook(), metrics, 'synthetic-history.xlsx').periods[1];
+
+    expect(january.rows.find((row) => row.code === 'DESSERT_WRITEOFF')).toMatchObject({ absoluteValue: null, computedPercent: 0.9 });
+    expect(january.issues).toEqual([
+      expect.objectContaining({ severity: 'warning', field: 'absoluteValue', code: 'DESSERT_WRITEOFF', cell: 'январь 26!D45' }),
+    ]);
+  });
+
+  it('reads the previous-month column of a shifted sheet for a month without its own sheet', () => {
+    const december = buildHistoricalPreview(shiftedWorkbook(), metrics, 'synthetic-history.xlsx').periods[0];
+
+    expect(december).toMatchObject({ revenue: 400000 });
+    expect(december.rows.find((row) => row.code === 'LABOR_COST')).toMatchObject({ absoluteValue: 44000 });
+  });
+
+  it('prefers the plainly named sheet when a month has a copy', () => {
+    const workbook = fixture();
+    const copy = XLSX.utils.aoa_to_sheet([[]]);
+    copy.D18 = number(1);
+    XLSX.utils.book_append_sheet(workbook, copy, 'январь 26 (копия)');
+
+    const preview = buildHistoricalPreview(workbook, metrics, 'synthetic-history.xlsx');
+
+    expect(preview.periods[1]).toMatchObject({ revenue: 500000, formData: { sourceSheet: 'январь 26' } });
+    expect(preview.warnings.join(' ')).toContain('несколько листов');
+  });
+
+  it('does not report a template-shaped sheet as shifted', () => {
+    expect(buildHistoricalPreview(fixture(), metrics, 'synthetic-history.xlsx').warnings.join(' ')).not.toContain('строки сдвинуты');
+  });
+});
+
+describe('cleanNumericString currency suffixes', () => {
+  it.each([
+    ['5 027 108р', 5027108],
+    ['48544,00р', 48544],
+    ['1 200 руб.', 1200],
+    ['625 880 ₽', 625880],
+  ])('parses %s', (raw, value) => {
+    expect(cleanNumericString(raw)).toEqual({ value });
+  });
+
+  it('still rejects free text', () => {
+    expect(cleanNumericString('добавлю позже').value).toBeNull();
+    expect(cleanNumericString('403000 ???').value).toBeNull();
   });
 });
 

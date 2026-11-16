@@ -71,7 +71,8 @@ export function cleanNumericString(raw: string): { value: number | null; problem
   let text = original.replace(/[\u00a0\u202f]/g, ' ');
   const percent = text.endsWith('%');
   if (percent) text = text.slice(0, -1).trim();
-  text = text.replace(/\s*[₽$€£]$/, '').trim();
+  // Currency marks typed by hand: «5 027 108р», «48544,00р», «1 200 руб.».
+  text = text.replace(/\s*(?:[₽$€£]|руб\.?|р\.?)$/i, '').trim();
   // Only a complete decimal or consistently grouped thousands are accepted.
   if (!/^[+-]?(?:\d+|\d{1,3}(?: \d{3})+)(?:[.,]\d+)?$/.test(text)) return invalid();
   const value = Number(text.replace(/ /g, '').replace(',', '.'));
