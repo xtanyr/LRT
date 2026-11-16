@@ -80,3 +80,13 @@ export function cleanNumericString(raw: string): { value: number | null; problem
     ? { value, problem: `Процентный знак в числовом поле: "${original}"; значение сохранено в процентах (0–100)` }
     : { value };
 }
+
+/**
+ * Multipart parsers hand over non-ASCII upload names as latin1-decoded UTF-8 bytes
+ * («Ð›ÐµÐ½Ð°.xlsx» instead of «Лена.xlsx»). Restores the name when it is such a mis-decoding.
+ */
+export function decodeUploadFileName(name: string): string {
+  if (!/[\u0080-ÿ]/.test(name) || /[^\u0000-ÿ]/.test(name)) return name;
+  const decoded = Buffer.from(name, 'latin1').toString('utf8');
+  return decoded.includes('�') ? name : decoded;
+}

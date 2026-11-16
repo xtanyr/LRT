@@ -12,7 +12,7 @@ import {
   ImportMetricReference,
   ImportFormField,
 } from './import-layout';
-import { cleanNumericString } from './import.parser';
+import { cleanNumericString, decodeUploadFileName } from './import.parser';
 
 interface HistoricalConfirmPayload {
   coffeeShopId: number;
@@ -111,8 +111,9 @@ function validatePeriod(period: HistoricalPeriodPreview) {
   if (!Number.isInteger(period.month) || period.month < 1 || period.month > 12) {
     throw new BadRequestException(`${label}: некорректный месяц`);
   }
-  if (!isFiniteNumber(period.revenue) || period.revenue < 0) {
-    throw new BadRequestException(`${label}: укажите выручку числом не меньше нуля`);
+  // Revenue is optional for historical periods; when given it must be a non-negative number.
+  if (period.revenue != null && (!isFiniteNumber(period.revenue) || period.revenue < 0)) {
+    throw new BadRequestException(`${label}: выручка должна быть числом не меньше нуля или пустой`);
   }
   if (period.drinksCount != null && (!Number.isInteger(period.drinksCount) || period.drinksCount < 0)) {
     throw new BadRequestException(`${label}: количество напитков должно быть целым числом не меньше нуля`);
@@ -199,6 +200,7 @@ function buildFormData(period: HistoricalPeriodPreview, sourceFile: string): His
       masterSheet: period.sourceSheet,
       year: period.year,
       month: period.month,
+      revenueMissing: period.revenue == null,
     },
   };
 }
@@ -225,7 +227,7 @@ export class ImportService {
       select: { id: true, code: true, name: true, unit: true },
     }) as ImportMetricReference[];
     try {
-      return annotateNegativeValues(buildHistoricalPreview(workbook, metrics, sanitizeFileName(file.originalname)));
+      return annotateNegativeValues(buildHistoricalPreview(workbook, metrics, sanitizeFileName(typeof file.originalname === 'string' ? decodeUploadFileName(file.originalname) : file.originalname)));
     } catch (error) {
       throw new BadRequestException(error instanceof Error ? error.message : 'Неизвестный формат исторического файла');
     }
@@ -288,7 +290,8 @@ export class ImportService {
           coffeeShopId: data.coffeeShopId,
           year: period.year!,
           month: period.month,
-          revenue: new Decimal(period.revenue!),
+          // The column is NOT NULL and 0 already means «not filled» for reports.
+          revenue: new Decimal(period.revenue ?? 0),
           drinksCount: period.drinksCount,
           status: 'SUBMITTED' as const,
           isLocked: true,

@@ -202,6 +202,20 @@ describe('ImportService.confirmImport', () => {
     expect(prisma.created[0].formData.fields[0]).toMatchObject({ key: 'revenue', value: 500000, sourceCell: 'декабрь 25!D18' });
   });
 
+  it('imports a period without revenue as 0 and marks the revenue as missing', async () => {
+    const prisma = fakePrisma();
+    const payload = structuredClone(validPayload) as any;
+    payload.periods[0].revenue = null;
+    payload.periods[0].formData.fields = [{ key: 'revenue', label: 'Выручка', value: null, sourceCell: 'декабрь 25!D18' }];
+    payload.periods[0].issues = [{ severity: 'warning', field: 'revenue', message: 'В файле нет выручки за период' }];
+
+    await new ImportService(prisma as any).confirmImport(payload, 42);
+
+    expect(prisma.created[0].revenue.toNumber()).toBe(0);
+    expect(prisma.created[0].formData.importSource).toMatchObject({ revenueMissing: true });
+    expect(prisma.created[0].ratingSnapshot.rating).toBe(21.5);
+  });
+
   it('rejects a currently negative revenue even if the imported source revenue was valid', async () => {
     const prisma = fakePrisma();
     const payload = JSON.parse(JSON.stringify(validPayload));

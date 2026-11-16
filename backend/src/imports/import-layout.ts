@@ -149,7 +149,7 @@ export const FORM_FIELD_MAPPINGS = [
   ['laborAnalysis', 'ФОТ: анализ', 'F18'],
   ['personnelCostsAmount', 'Расходы на персонал: сумма', 'D24'],
   ['personnelCostsRevenueShare', 'Расходы на персонал: % от выручки', 'D25'],
-  ['personnelCostsAnalysis', 'Расходы на персонал: анализ', 'F23'],
+  ['personnelCostsAnalysis', 'Расходы на персонал: анализ', 'F24'],
   ['freeAccessAmount', 'Свободный доступ: сумма', 'D31'],
   ['freeAccessRevenueShare', 'Свободный доступ: % от выручки', 'D32'],
   ['freeAccessAnalysis', 'Свободный доступ: анализ', 'F31'],
@@ -171,6 +171,39 @@ export const FORM_FIELD_MAPPINGS = [
   ['equipmentPlanUrl', 'Ссылка на план оборудования и ремонта', 'H66'],
   ['summary', 'Итоги месяца', 'B70'],
 ] as const;
+
+/** Leaders answer some prompts in the neighbouring merged block; used when the primary cell is empty. */
+const FORM_FIELD_FALLBACK_CELLS: Record<string, string> = {
+  guestExperienceAnalysis: 'D10',
+};
+
+/**
+ * Sample columns shipped with the blank template («октябрь–декабрь 2025»), in LEGACY_METRIC_ROWS order.
+ * They are illustrations of the scoring rules, not results of a coffee shop, and must never be imported.
+ */
+const TEMPLATE_DEMO_COLUMNS: number[][] = [
+  [95, 2, 90, 90, 11, 11, 0.8, 0.5, 1.2],
+  [90, 3, 80, 80, 10, 16, 1, 0.7, 1.5],
+  [70, 4, 65, 70, 7, 17, 2, 2, 3],
+];
+
+function isTemplateDemoColumn(values: Array<number | null>) {
+  return TEMPLATE_DEMO_COLUMNS.some((demo) => demo.every((expected, index) => {
+    const value = values[index];
+    return value != null && Math.abs(value - expected) < 1e-9;
+  }));
+}
+
+const DEFAULT_DRINKS_ROW = 11;
+const DEFAULT_RATING_ROW = 354;
+
+interface MasterLayout {
+  valueRows: number[];
+  scoreRows: number[];
+  drinksRow: number;
+  ratingRow: number;
+  moved: boolean;
+}
 
 function normalize(value: string) {
   return value.toLocaleLowerCase('ru-RU').replace(/ё/g, 'е').replace(/[^a-zа-я0-9]+/g, ' ').trim();
@@ -252,6 +285,38 @@ function inferMasterPeriods(sheet: XLSX.WorkSheet, sheetName: string) {
   return periods;
 }
 
+/**
+ * Finds the master rows by their column-A labels, so a workbook where someone inserted or removed
+ * a row still imports. Every row falls back to its position in the original template.
+ */
+function resolveMasterLayout(sheet: XLSX.WorkSheet): MasterLayout {
+  const lastRow = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']).e.r + 1 : 0;
+  const label = (row: number) => normalize(String((sheet[`A${row}`] as XLSX.CellObject | undefined)?.v ?? ''));
+  const findRow = (from: number, to: number, matches: (text: string) => boolean) => {
+    for (let row = from; row <= Math.min(to, lastRow); row += 1) {
+      const text = label(row);
+      if (text && matches(text)) return row;
+    }
+    return undefined;
+  };
+  const named = (definition: LegacyMetricDefinition) => (text: string) =>
+    definition.aliases.some((alias) => text.includes(normalize(alias)));
+
+  const scoreHeader = findRow(DEFAULT_DRINKS_ROW + 1, lastRow, (text) => text.includes('балльная оценка'));
+  const valuesEnd = scoreHeader ? scoreHeader - 1 : 60;
+  const valueRows = LEGACY_METRIC_ROWS.map((definition) => findRow(2, valuesEnd, named(definition)) ?? definition.row);
+  const scoreRows = LEGACY_METRIC_ROWS.map((definition) =>
+    (scoreHeader ? findRow(scoreHeader + 1, lastRow, named(definition)) : undefined) ?? definition.scoreRow);
+  const drinksRow = findRow(2, valuesEnd, (text) => text.includes('количество проданных напитков')) ?? DEFAULT_DRINKS_ROW;
+  const ratingRow = (scoreHeader ? findRow(scoreHeader + 1, lastRow, (text) => text.includes('итоговый рейтинг')) : undefined)
+    ?? DEFAULT_RATING_ROW;
+  const moved = drinksRow !== DEFAULT_DRINKS_ROW
+    || ratingRow !== DEFAULT_RATING_ROW
+    || LEGACY_METRIC_ROWS.some((definition, index) =>
+      valueRows[index] !== definition.row || scoreRows[index] !== definition.scoreRow);
+  return { valueRows, scoreRows, drinksRow, ratingRow, moved };
+}
+
 function detectReportPeriod(sheetName: string) {
   const detected = detectMonthYear(sheetName);
   if (detected.month && !detected.year) {
@@ -261,18 +326,33 @@ function detectReportPeriod(sheetName: string) {
   return detected;
 }
 
-function extractFormData(sheet: XLSX.WorkSheet, sheetName: string): HistoricalFormData {
+function formCellValue(sheet: XLSX.WorkSheet, templateSheet: XLSX.WorkSheet | undefined, address: string) {
+  const value = (sheet[address] as XLSX.CellObject | undefined)?.v;
+  if (value == null || typeof value === 'object') return null;
+  if (typeof value === 'string') {
+    // «%», blank strings and prompts left exactly as in the template sheet are not answers.
+    const text = normalize(value);
+    const template = (templateSheet?.[address] as XLSX.CellObject | undefined)?.v;
+    if (text === '' || (typeof template === 'string' && normalize(template) === text)) return null;
+  }
+  return value as string | number | boolean;
+}
+
+function extractFormData(sheet: XLSX.WorkSheet, sheetName: string, templateSheet?: XLSX.WorkSheet): HistoricalFormData {
   return {
     sourceSheet: sheetName,
-    fields: FORM_FIELD_MAPPINGS.map(([key, label, address]) => {
-      const cell = sheet[address] as XLSX.CellObject | undefined;
-      const value = cell?.v;
-      return {
-        key,
-        label,
-        value: value == null || typeof value === 'object' ? null : value as string | number | boolean,
-        sourceCell: cellRef(sheetName, address),
-      };
+    fields: FORM_FIELD_MAPPINGS.map(([key, label, primaryAddress]) => {
+      let address: string = primaryAddress;
+      let value = formCellValue(sheet, templateSheet, address);
+      const fallbackAddress = FORM_FIELD_FALLBACK_CELLS[key];
+      if (value == null && fallbackAddress) {
+        const fallback = formCellValue(sheet, templateSheet, fallbackAddress);
+        if (fallback != null) {
+          address = fallbackAddress;
+          value = fallback;
+        }
+      }
+      return { key, label, value, sourceCell: cellRef(sheetName, address) };
     }),
   };
 }
@@ -295,6 +375,9 @@ export function buildHistoricalPreview(
   if (!sourceSheetName) throw new Error('В книге нет листа «Метрики»');
   const sourceSheet = workbook.Sheets[sourceSheetName];
   const reportSheets = new Map<string, { name: string; sheet: XLSX.WorkSheet }>();
+  const templateSheetName = workbook.SheetNames.find((name) => normalize(name).includes('шаблон'));
+  const templateSheet = templateSheetName ? workbook.Sheets[templateSheetName] : undefined;
+  const layout = resolveMasterLayout(sourceSheet);
   for (const name of workbook.SheetNames) {
     if (name === sourceSheetName || normalize(name).includes('шаблон')) continue;
     const detected = detectReportPeriod(name);
@@ -306,31 +389,57 @@ export function buildHistoricalPreview(
   ];
   const reviewRating = metrics.find((metric) => metric.code === 'REVIEW_RATING');
   if (reviewRating) warnings.push(`Текущая метрика ${reviewRating.code} отсутствует в историческом шаблоне и не получает критическую зону.`);
+  if (layout.moved) {
+    warnings.push(`Раскладка листа «${sourceSheetName}» отличается от шаблона: строки найдены по названиям (напитки — строка ${layout.drinksRow}, итоговый рейтинг — строка ${layout.ratingRow}). Сверьте значения с исходником.`);
+  }
 
   const periods = inferMasterPeriods(sourceSheet, sourceSheetName).map((period): HistoricalPeriodPreview => {
     const issues: ImportIssue[] = period.issue ? [period.issue] : [];
-    const drinksAddress = `${period.addressColumn}11`;
+    const drinksAddress = `${period.addressColumn}${layout.drinksRow}`;
     const drinks = readNumber(sourceSheet, sourceSheetName, drinksAddress, false);
     if (drinks.issue) issues.push({ ...drinks.issue, field: 'drinksCount' });
     const reportSheet = period.year ? reportSheets.get(`${period.year}-${period.month}`) : undefined;
-    const formData = reportSheet ? extractFormData(reportSheet.sheet, reportSheet.name) : null;
-    const revenue = reportSheet ? readNumber(reportSheet.sheet, reportSheet.name, 'D18', false) : { value: null, raw: '' };
+    const formData = reportSheet ? extractFormData(reportSheet.sheet, reportSheet.name, templateSheet) : null;
+    // No sheet for this month: the next month's report repeats it in the «previous month» column C.
+    const nextSheet = !reportSheet && period.year
+      ? reportSheets.get(period.month === 12 ? `${period.year + 1}-1` : `${period.year}-${period.month + 1}`)
+      : undefined;
+    const previousColumnSheet = nextSheet
+      && monthFromHeader((nextSheet.sheet.C17 as XLSX.CellObject | undefined)?.v) === period.month
+      ? nextSheet
+      : undefined;
+    const amountSheet = reportSheet ?? previousColumnSheet;
+    const amountColumn = reportSheet ? 'D' : 'C';
+    const revenueAddress = `${amountColumn}18`;
+    const revenue = amountSheet
+      ? readNumber(amountSheet.sheet, amountSheet.name, revenueAddress, false)
+      : { value: null, raw: '' };
     if (revenue.issue) issues.push({ ...revenue.issue, field: 'revenue' });
-    if (revenue.value == null) {
+    if (revenue.value == null && !revenue.issue) {
+      // A missing revenue does not block the period: the source rating and points do not depend on it.
       issues.push({
-        severity: 'error',
+        severity: 'warning',
         field: 'revenue',
-        message: 'В листе отчёта нет выручки за период; укажите её вручную или исключите период.',
-        cell: reportSheet ? cellRef(reportSheet.name, 'D18') : undefined,
+        message: 'В файле нет выручки за период: отчёт можно импортировать без неё (сохранится 0 ₽) или вписать выручку вручную.',
+        cell: amountSheet ? cellRef(amountSheet.name, revenueAddress) : undefined,
+      });
+    } else if (revenue.value != null && previousColumnSheet) {
+      issues.push({
+        severity: 'warning',
+        field: 'revenue',
+        message: `Листа отчёта за этот месяц нет: выручка и суммы взяты из столбца предыдущего месяца листа «${previousColumnSheet.name}». Тексты анализа не импортируются.`,
+        cell: cellRef(previousColumnSheet.name, revenueAddress),
       });
     }
 
-    const rows = LEGACY_METRIC_ROWS.map((definition): HistoricalMetricRow => {
-      const sourceAddress = `${period.addressColumn}${definition.row}`;
-      const sourcePointsAddress = `${period.addressColumn}${definition.scoreRow}`;
+    const sourceValues: Array<number | null> = [];
+    const rows = LEGACY_METRIC_ROWS.map((definition, definitionIndex): HistoricalMetricRow => {
+      const sourceAddress = `${period.addressColumn}${layout.valueRows[definitionIndex]}`;
+      const sourcePointsAddress = `${period.addressColumn}${layout.scoreRows[definitionIndex]}`;
       const parsedValue = readNumber(sourceSheet, sourceSheetName, sourceAddress, Boolean(definition.percent));
       const parsedPoints = readNumber(sourceSheet, sourceSheetName, sourcePointsAddress, false);
       const metric = metricForDefinition(definition, metrics);
+      sourceValues.push(parsedValue.value);
       if (parsedValue.issue) issues.push({ ...parsedValue.issue, field: 'metricValue', code: definition.codes[0] });
       if (parsedPoints.issue) issues.push({ ...parsedPoints.issue, field: 'sourcePoints', code: definition.codes[0] });
       if (!metric) {
@@ -339,23 +448,23 @@ export function buildHistoricalPreview(
           field: 'metricId',
           code: definition.codes[0],
           message: `Метрика ${definition.codes.join('/')} не найдена в конфигурации; выберите соответствие вручную.`,
-          cell: cellRef(sourceSheetName, `A${definition.row}`),
+          cell: cellRef(sourceSheetName, `A${layout.valueRows[definitionIndex]}`),
         });
       }
       const sourceCell = sourceSheet[sourcePointsAddress] as XLSX.CellObject | undefined;
       const thresholds = definition.thresholds(period.column, drinks.value);
       let absoluteValue = definition.revenueShare ? null : parsedValue.value;
       const computedPercent = definition.revenueShare ? parsedValue.value : null;
-      if (reportSheet) {
-        const amountAddress = definition.codes[0] === 'LABOR_COST'
-          ? 'D19'
+      if (amountSheet) {
+        const amountRow = definition.codes[0] === 'LABOR_COST'
+          ? 19
           : definition.codes[0] === 'DESSERT_WRITEOFF'
-            ? 'D40'
+            ? 40
             : definition.codes[0] === 'PRODUCT_WRITEOFF'
-              ? 'D49'
+              ? 49
               : undefined;
-        if (amountAddress) {
-          const amount = readNumber(reportSheet.sheet, reportSheet.name, amountAddress, false);
+        if (amountRow) {
+          const amount = readNumber(amountSheet.sheet, amountSheet.name, `${amountColumn}${amountRow}`, false);
           if (amount.issue) issues.push({ ...amount.issue, field: 'absoluteValue', code: definition.codes[0] });
           if (amount.value != null) absoluteValue = amount.value;
         }
@@ -363,7 +472,7 @@ export function buildHistoricalPreview(
       return {
         metricId: metric?.id,
         code: metric?.code ?? definition.codes[0],
-        metricName: metric?.name ?? String((sourceSheet[`A${definition.row}`] as XLSX.CellObject | undefined)?.v ?? definition.aliases[0]),
+        metricName: metric?.name ?? String((sourceSheet[`A${layout.valueRows[definitionIndex]}`] as XLSX.CellObject | undefined)?.v ?? definition.aliases[0]),
         unit: metric?.unit ?? (definition.percent ? '%' : ''),
         absoluteValue,
         computedPercent,
@@ -380,7 +489,7 @@ export function buildHistoricalPreview(
       };
     });
 
-    const ratingAddress = `${period.addressColumn}354`;
+    const ratingAddress = `${period.addressColumn}${layout.ratingRow}`;
     const rating = readNumber(sourceSheet, sourceSheetName, ratingAddress, false);
     if (rating.issue) issues.push({ ...rating.issue, field: 'sourceRating' });
     const hasMetricData = rows.some((row) => row.absoluteValue != null || row.computedPercent != null);
@@ -391,6 +500,23 @@ export function buildHistoricalPreview(
         message: 'В исходной книге нет рассчитанного итогового рейтинга за период.',
         cell: cellRef(sourceSheetName, ratingAddress),
       });
+    }
+    if (isTemplateDemoColumn(sourceValues)) {
+      issues.push({
+        severity: 'error',
+        field: 'templateDemo',
+        message: 'Столбец совпадает с демонстрационным примером из шаблона — это не данные кофейни, период не импортируется.',
+        cell: cellRef(sourceSheetName, `${period.addressColumn}1`),
+      });
+    } else if (hasMetricData) {
+      const missing = rows.filter((_, index) => sourceValues[index] == null).map((row) => row.metricName);
+      if (missing.length > 0) {
+        issues.push({
+          severity: 'warning',
+          field: 'metricValue',
+          message: `Период заполнен не полностью — нет значений: ${missing.join(', ')}. Если месяц ещё не закрыт, импортируйте его позже: повторно загрузить период нельзя.`,
+        });
+      }
     }
     const selected = hasMetricData && !issues.some((issue) => issue.severity === 'error');
     return {
