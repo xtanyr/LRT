@@ -24,9 +24,9 @@ export class DashboardService {
   const data = await this.getCityLeaderDashboard(user);
   // Не глобальная роль (Лидер-семпай) видит только города и кофейни из своей области видимости.
   const scope = this.access.global(user) ? undefined : this.access.shopWhere(user);
-  const cities = await this.prisma.city.findMany(scope
-    ? {where:{isActive:true,coffeeShops:{some:{isActive:true,...scope}}},include:{coffeeShops:{where:{isActive:true,...scope}}}}
-    : {where:{isActive:true},include:{coffeeShops:{where:{isActive:true}}}});
+  const cityWhere = scope ? {coffeeShops:{some:{isActive:true,...scope}}} : {};
+  const shopWhere = scope ? {isActive:true,...scope} : {isActive:true};
+  const cities = await this.prisma.city.findMany({where:{isActive:true,...cityWhere},include:{coffeeShops:{where:shopWhere}}});
   return {...data,cities};
  }
  async getCitySummary(cityId: number,user: Actor) {
