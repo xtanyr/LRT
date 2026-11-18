@@ -8,3 +8,6 @@
 /* Pastel highlight behind each score, in the color of the digits */
 .yearly-score{--score-color:var(--ink-2);color:var(--score-color);padding:3px 8px;border-radius:6px;background:color-mix(in srgb,var(--score-color) 16%,transparent)}
 .yearly-score.is-empty{background:none}
+
+/* The scroll container must not have padding, otherwise rows show through above the sticky header */
+.yearly-ratings .card.table-wrap{padding:0}
