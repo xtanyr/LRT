@@ -1,12 +1,12 @@
 import { BadRequestException } from '@nestjs/common';
 
 /**
- * Отчёт за месяц закрывается в 12:00 по Москве 11-го числа следующего месяца.
- * Europe/Moscow — UTC+3 без перехода на летнее время, поэтому 12:00 МСК = 09:00 UTC.
+ * Отчёт за месяц закрывается в 09:00 по Москве 10-го числа следующего месяца.
+ * Europe/Moscow — UTC+3 без перехода на летнее время, поэтому 09:00 МСК = 06:00 UTC.
  * `month` — календарный номер месяца (1–12), поэтому Date.UTC(year, month, …) — следующий месяц.
  */
 export function reportCloseAt(year: number, month: number) {
-  return Date.UTC(year, month, 11, 9);
+  return Date.UTC(year, month, 10, 6);
 }
 
 export function reportPeriodState(year: number, month: number, now = new Date()) {

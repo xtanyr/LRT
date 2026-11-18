@@ -15,15 +15,15 @@ function setup() {
 }
 
 describe('Report closing job: reports are only ever submitted manually', () => {
-  it('does not touch the previous month before 12:00 Moscow on the 11th', async () => {
+  it('does not touch the previous month before 09:00 Moscow on the 10th', async () => {
     const { db, service } = setup();
-    await service.handleCloseReports(new Date('2026-11-11T08:59:59Z'));
+    await service.handleCloseReports(new Date('2026-11-10T05:59:59Z'));
     expect(db.monthlyReport.updateMany).not.toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ month: 10 }) }));
   });
 
   it('never submits an unfinished report after the deadline', async () => {
     const { db, service } = setup();
-    await service.handleCloseReports(new Date('2026-11-11T09:00:00Z'));
+    await service.handleCloseReports(new Date('2026-11-10T06:00:00Z'));
     expect(db.monthlyReport.update).not.toHaveBeenCalled();
     expect(db.monthlyReport.findMany).not.toHaveBeenCalled();
     for (const [arg] of db.monthlyReport.updateMany.mock.calls) {
@@ -34,14 +34,14 @@ describe('Report closing job: reports are only ever submitted manually', () => {
 
   it('never creates an empty submitted report for a shop without a report', async () => {
     const { db, service } = setup();
-    await service.handleCloseReports(new Date('2026-11-11T09:00:00Z'));
+    await service.handleCloseReports(new Date('2026-11-10T06:00:00Z'));
     expect(db.monthlyReport.create).not.toHaveBeenCalled();
     expect(db.coffeeShop.findMany).not.toHaveBeenCalled();
   });
 
   it('still locks reports that were already submitted by a person', async () => {
     const { db, service } = setup();
-    await service.handleCloseReports(new Date('2026-11-11T09:00:00Z'));
+    await service.handleCloseReports(new Date('2026-11-10T06:00:00Z'));
     expect(db.monthlyReport.updateMany).toHaveBeenCalledWith({ where: { year: 2026, month: 10, status: 'SUBMITTED', isLocked: false }, data: { isLocked: true } });
   });
 });
