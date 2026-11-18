@@ -69,3 +69,69 @@ describe('AdminUsersPage', () => {
     expect(api.patch).not.toHaveBeenCalled();
   });
 });
+
+describe('AdminUsersPage Leader-Senpai', () => {
+  const senpai = {
+    id: 8,
+    name: 'Семпай',
+    email: 'senpai@example.com',
+    role: 'SENPAI',
+    approvedAt: null,
+    cityAssignments: [],
+    coffeeShopAssignments: [],
+    supervisions: [{ leaderId: 7 }],
+  };
+  const otherSenpai = { ...senpai, id: 9, name: 'Другой семпай', email: 'other@example.com', supervisions: [] };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(api.get).mockImplementation(async (url) => ({
+      data: url === '/admin/users' ? [user, senpai, otherSenpai] : url === '/cities' ? cities : shops,
+    }) as any);
+    vi.mocked(api.patch).mockResolvedValue({ data: senpai } as any);
+  });
+
+  it('shows the supervised leaders picker only for SENPAI, listing only LEADER users', async () => {
+    render(<AdminUsersPage />);
+    const buttons = await screen.findAllByRole('button', { name: 'Настроить' });
+
+    fireEvent.click(buttons[1]);
+    const group = screen.getByRole('group', { name: 'Подчинённые лидеры' });
+    expect(within(group).getAllByRole('checkbox')).toHaveLength(1);
+    expect(within(group).getByRole('checkbox', { name: 'Лидер' })).toBeChecked();
+    expect(within(group).queryByRole('checkbox', { name: 'Семпай' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+
+    fireEvent.click(buttons[0]);
+    expect(screen.queryByRole('group', { name: 'Подчинённые лидеры' })).not.toBeInTheDocument();
+  });
+
+  it('sends the selected leaderIds when saving a SENPAI', async () => {
+    render(<AdminUsersPage />);
+    const buttons = await screen.findAllByRole('button', { name: 'Настроить' });
+    fireEvent.click(buttons[2]);
+
+    fireEvent.click(within(screen.getByRole('group', { name: 'Подчинённые лидеры' })).getByRole('checkbox', { name: 'Лидер' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/users/9', expect.objectContaining({
+      role: 'SENPAI', leaderIds: [7], coffeeShopIds: [], cityIds: [],
+    })));
+  });
+
+  it('sends an empty leaderIds list for an ordinary leader', async () => {
+    render(<AdminUsersPage />);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Настроить' }))[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/users/7', expect.objectContaining({
+      role: 'LEADER', leaderIds: [],
+    })));
+  });
+
+  it('shows the number of supervised leaders in the table', async () => {
+    render(<AdminUsersPage />);
+    expect(await screen.findByText('Подчинённых лидеров: 1')).toBeInTheDocument();
+    expect(screen.getByText('Подчинённых лидеров: 0')).toBeInTheDocument();
+  });
+});

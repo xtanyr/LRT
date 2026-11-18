@@ -21,6 +21,7 @@ export default function DashboardPage() {
       return <CityDashboardPage />;
     case 'COO':
     case 'VIEWER':
+    case 'SENPAI':
       return <CooShopsPage />;
     case 'ADMIN':
       return <AdminMetricsPage />;

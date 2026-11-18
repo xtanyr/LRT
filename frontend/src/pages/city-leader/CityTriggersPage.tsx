@@ -52,7 +52,7 @@ const actionMessage = (error: unknown, fallback: string) => {
 
 export default function CityTriggersPage() {
   const auth = useContext(AuthContext);
-  const readOnly = (auth?.viewAsRole || auth?.user?.role) === 'VIEWER';
+  const readOnly = (auth?.viewAsRole || auth?.user?.role) === 'VIEWER' || (auth?.viewAsRole || auth?.user?.role) === 'SENPAI';
   const [items, setItems] = useState<IPVStatus[]>([]);
   const [configs, setConfigs] = useState<TriggerConfig[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);

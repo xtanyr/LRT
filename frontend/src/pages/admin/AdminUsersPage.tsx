@@ -26,6 +26,7 @@ interface UserRow {
   approvedAt?: string;
   cityAssignments: Array<{ city: City }>;
   coffeeShopAssignments: Array<{ coffeeShop: CoffeeShop; assignedFrom: string; assignedUntil?: string | null }>;
+  supervisions?: Array<{ leaderId: number }>;
 }
 
 const ROLES = [
@@ -34,6 +35,7 @@ const ROLES = [
   { value: 'COO', label: 'Операционный директор' },
   { value: 'ADMIN', label: 'Администратор' },
   { value: 'VIEWER', label: 'Просмотр' },
+  { value: 'SENPAI', label: 'Лидер-семпай' },
 ];
 
 export default function AdminUsersPage() {
@@ -46,6 +48,7 @@ export default function AdminUsersPage() {
   const [role, setRole] = useState('LEADER');
   const [cityIds, setCityIds] = useState<number[]>([]);
   const [shopIds, setShopIds] = useState<number[]>([]);
+  const [leaderIds, setLeaderIds] = useState<number[]>([]);
   const [leaderCityId, setLeaderCityId] = useState<number | ''>('');
   const [approvedAt, setApprovedAt] = useState('');
   const [assignmentFrom, setAssignmentFrom] = useState(new Date().toISOString().slice(0,10));
@@ -82,6 +85,7 @@ export default function AdminUsersPage() {
     setEditing(u);
     setRole(u.role);
     setCityIds(u.cityAssignments?.map(a=>a.city.id) || []);
+    setLeaderIds(u.supervisions?.map(s=>s.leaderId) || []);
     setLeaderCityId(currentShop?.cityId || '');
     setShopIds(currentShop ? [currentShop.id] : []);
     setApprovedAt(u.approvedAt?.slice(0,10)||'');
@@ -94,6 +98,7 @@ export default function AdminUsersPage() {
   const handleRoleChange = (next: string) => {
     setRole(next);
     setCityIds([]);
+    setLeaderIds([]);
     setShopIds([]);
     setLeaderCityId('');
     setError('');
@@ -120,7 +125,7 @@ export default function AdminUsersPage() {
     setSaving(true);
     setError('');
     try {
-      await api.patch('/users/'+editing.id, {role, cityIds: role==='CITY_LEADER'?cityIds:[], coffeeShopIds: role==='LEADER'?shopIds:[], approvedAt:approvedAt||null, assignmentFrom, assignmentUntil});
+      await api.patch('/users/'+editing.id, {role, cityIds: role==='CITY_LEADER'?cityIds:[], coffeeShopIds: role==='LEADER'?shopIds:[], leaderIds: role==='SENPAI'?leaderIds:[], approvedAt:approvedAt||null, assignmentFrom, assignmentUntil});
       setOpen(false);
       await load();
     } catch {
@@ -162,7 +167,7 @@ export default function AdminUsersPage() {
                   <td className="muted">{u.email}</td>
                   <td>{ROLES.find((r) => r.value === u.role)?.label || u.role}</td>
                   <td className="muted">{u.cityAssignments?.[0]?.city.name || '—'}</td>
-                  <td className="muted">{u.coffeeShopAssignments?.filter(a=>!a.assignedUntil).map(a=>a.coffeeShop.name).join(', ') || '—'}<div className="helper-text">{u.coffeeShopAssignments?.filter(a=>!a.assignedUntil).map(a=>'с '+new Date(a.assignedFrom).toLocaleDateString('ru-RU')).join(', ')}</div></td>
+                  <td className="muted">{u.role==='SENPAI'&&<div>{'Подчинённых лидеров: '+(u.supervisions?.length ?? 0)}</div>}{u.coffeeShopAssignments?.filter(a=>!a.assignedUntil).map(a=>a.coffeeShop.name).join(', ') || '—'}<div className="helper-text">{u.coffeeShopAssignments?.filter(a=>!a.assignedUntil).map(a=>'с '+new Date(a.assignedFrom).toLocaleDateString('ru-RU')).join(', ')}</div></td>
                   <td>
                     <button className="btn btn-ghost btn-sm" onClick={() => openEdit(u)}>Настроить</button>
                   </td>
@@ -183,6 +188,7 @@ export default function AdminUsersPage() {
 
           <label className="field">Дата утверждения в должности<input className="input" type="date" value={approvedAt} onChange={e=>setApprovedAt(e.target.value)}/></label>
           {role==='CITY_LEADER'&&<fieldset><legend>Города</legend>{cities.map(c=><label className="field" key={c.id}><input type="checkbox" checked={cityIds.includes(c.id)} onChange={e=>setCityIds(ids=>e.target.checked?[...ids,c.id]:ids.filter(id=>id!==c.id))}/>{c.name}</label>)}</fieldset>}
+          {role==='SENPAI'&&<fieldset><legend>Подчинённые лидеры</legend>{users.filter(x=>x.role==='LEADER').map(l=><label className="field" key={l.id}><input type="checkbox" checked={leaderIds.includes(l.id)} onChange={e=>setLeaderIds(ids=>e.target.checked?[...ids,l.id]:ids.filter(id=>id!==l.id))}/>{l.name}</label>)}{!users.some(x=>x.role==='LEADER')&&<span className="helper-text">Нет пользователей с ролью «Лидер кофейни»</span>}</fieldset>}
           {role==='LEADER'&&<div className="user-assignment-selects">
             <label className="field">
               <span className="field-label">Город кофейни</span>

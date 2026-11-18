@@ -55,7 +55,7 @@ interface Comment {
 
 export default function CityShopPage() {
   const auth = useContext(AuthContext);
-  const readOnly = (auth?.viewAsRole || auth?.user?.role) === 'VIEWER';
+  const readOnly = (auth?.viewAsRole || auth?.user?.role) === 'VIEWER' || (auth?.viewAsRole || auth?.user?.role) === 'SENPAI';
   const ratingColor = useRatingColors();
   const { shopId } = useParams();
   const [shop, setShop] = useState<{ id: number; name: string; city: { name: string }; leader: { name: string } | null } | null>(null);

@@ -102,7 +102,7 @@ export default function LeaderReportPage() {
  exampleParams.set('period',period);
  if(shopId)exampleParams.set('shop',String(shopId));
  const auth=useContext(AuthContext);
- const viewerOnly=(auth?.viewAsRole||auth?.user?.role)==='VIEWER';
+ const viewerOnly=['VIEWER','SENPAI'].includes((auth?.viewAsRole||auth?.user?.role) as string);
  const historical=Boolean(report?.isLocked||Date.now()>=Date.UTC(year,month,11,9));
  const locked=viewerOnly||(typeof report?.isEditable==='boolean'?!report.isEditable:!historicalEditingEnabled&&historical);
  const fieldDisabled=locked||(saving&&!automaticSaveInFlight.current);

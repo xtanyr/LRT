@@ -16,7 +16,7 @@ const avg = (values: (number | null)[]) => { const present = values.filter((valu
 export default function YearlyRatingsPage() {
   const { user, viewAsRole } = useAuth();
   const role = viewAsRole || user?.role;
-  const isNetwork = role === 'COO' || role === 'VIEWER';
+  const isNetwork = role === 'COO' || role === 'VIEWER' || role === 'SENPAI';
   const color = useRatingColors();
   const [shops, setShops] = useState<Shop[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
