@@ -16,22 +16,25 @@ export class CitiesController {
   constructor(private readonly citiesService: CitiesService, private readonly access: AccessService) {}
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER, UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER, UserRole.VIEWER, UserRole.SENPAI)
   @ApiOperation({ summary: 'Get all cities' })
   findAll(@GetUser() user: any, @Query('includeInactiveShops') includeInactiveShops?: string) {
     const global = this.access.global(user);
+    // «Лидер-семпай» видит только города и кофейни своих подчинённых, а не все кофейни города.
+    const senpai = user.role === UserRole.SENPAI;
     return this.citiesService.findAll(
-      global ? undefined : (user.cityAssignments || []).map((a: any) => a.cityId),
+      global || senpai ? undefined : (user.cityAssignments || []).map((a: any) => a.cityId),
       global && includeInactiveShops === 'true',
+      senpai ? this.access.shopWhere(user) : undefined,
     );
   }
 
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER, UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER, UserRole.VIEWER, UserRole.SENPAI)
   @ApiOperation({ summary: 'Get city by ID' })
   async findOne(@Param('id') id: string, @GetUser() user: any) {
     await this.access.requireCity(user, Number(id));
-    return this.citiesService.findOne(parseInt(id));
+    return this.citiesService.findOne(parseInt(id), user.role === UserRole.SENPAI ? this.access.shopWhere(user) : undefined);
   }
 
   @Post()

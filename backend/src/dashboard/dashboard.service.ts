@@ -22,7 +22,11 @@ export class DashboardService {
  }
  async getCooDashboard(user: Actor) {
   const data = await this.getCityLeaderDashboard(user);
-  const cities = await this.prisma.city.findMany({where:{isActive:true},include:{coffeeShops:{where:{isActive:true}}}});
+  // Не глобальная роль (Лидер-семпай) видит только города и кофейни из своей области видимости.
+  const scope = this.access.global(user) ? undefined : this.access.shopWhere(user);
+  const cities = await this.prisma.city.findMany(scope
+    ? {where:{isActive:true,coffeeShops:{some:{isActive:true,...scope}}},include:{coffeeShops:{where:{isActive:true,...scope}}}}
+    : {where:{isActive:true},include:{coffeeShops:{where:{isActive:true}}}});
   return {...data,cities};
  }
  async getCitySummary(cityId: number,user: Actor) {

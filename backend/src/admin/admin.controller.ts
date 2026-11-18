@@ -16,7 +16,7 @@ export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   @Get('rating-color-config')
-  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER, UserRole.LEADER, UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER, UserRole.LEADER, UserRole.VIEWER, UserRole.SENPAI)
   @ApiOperation({ summary: 'Get rating color config' })
   getRatingColorConfig() {
     return this.adminService.getRatingColorConfig();
@@ -37,7 +37,7 @@ export class AdminController {
   }
 
   @Get('analysis-questions')
-  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.VIEWER)
+  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.VIEWER, UserRole.SENPAI)
   @ApiOperation({ summary: 'Get analysis questions' })
   getAnalysisQuestions() {
     return this.adminService.getAnalysisQuestions();

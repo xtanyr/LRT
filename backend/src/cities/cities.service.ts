@@ -5,21 +5,24 @@ import { PrismaService } from '../prisma/prisma.service';
 export class CitiesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(cityIds?: number[], includeInactiveShops = false) {
+  /** `shopFilter` (например, фильтр «Лидера-семпая») оставляет только города с подходящими кофейнями и показывает в них и в счётчике только такие кофейни. */
+  findAll(cityIds?: number[], includeInactiveShops = false, shopFilter?: object) {
     return this.prisma.city.findMany({
-      where: { isActive: true, ...(cityIds ? { id: { in: cityIds } } : {}) },
+      where: { isActive: true, ...(cityIds ? { id: { in: cityIds } } : {}), ...(shopFilter ? { coffeeShops: { some: { isActive: true, ...shopFilter } } } : {}) },
       include: {
-        coffeeShops: includeInactiveShops ? { orderBy: { name: 'asc' as const } } : { where: { isActive: true }, orderBy: { name: 'asc' as const } },
-        _count: { select: { coffeeShops: true } },
+        coffeeShops: shopFilter
+          ? { where: { isActive: true, ...shopFilter }, orderBy: { name: 'asc' as const } }
+          : includeInactiveShops ? { orderBy: { name: 'asc' as const } } : { where: { isActive: true }, orderBy: { name: 'asc' as const } },
+        _count: { select: { coffeeShops: shopFilter ? { where: shopFilter } : true } },
       },
       orderBy: { name: 'asc' },
     });
   }
 
-  findOne(id: number) {
+  findOne(id: number, shopFilter?: object) {
     return this.prisma.city.findUnique({
       where: { id },
-      include: { coffeeShops: { where: { isActive: true } } },
+      include: { coffeeShops: { where: { isActive: true, ...(shopFilter ?? {}) } } },
     });
   }
 
