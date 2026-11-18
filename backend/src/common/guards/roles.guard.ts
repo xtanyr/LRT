@@ -1,17 +1,17 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
-import { UserRole } from '../enums/user-role.enum';
+import { UserRole, isReadOnlyRole } from '../enums/user-role.enum';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    // Роль «Просмотр» имеет доступ только на чтение: любые изменяющие запросы запрещены независимо от списка ролей.
+    // Роли «Просмотр» и «Лидер-семпай» имеют доступ только на чтение: любые изменяющие запросы запрещены независимо от списка ролей.
     const request = context.switchToHttp().getRequest();
-    if (request.user?.role === UserRole.VIEWER && !['GET', 'HEAD', 'OPTIONS'].includes(String(request.method).toUpperCase())) {
-      throw new ForbiddenException('Роль «Просмотр» доступна только для просмотра');
+    if (isReadOnlyRole(request.user?.role) && !['GET', 'HEAD', 'OPTIONS'].includes(String(request.method).toUpperCase())) {
+      throw new ForbiddenException('Эта роль доступна только для просмотра');
     }
     const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
       context.getHandler(),

@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/com
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessService, Actor } from '../common/access.service';
+import { isReadOnlyRole } from '../common/enums/user-role.enum';
 import { reportPeriodState } from '../common/report-period';
 import { nonNegativeNumberValue, numberValue, positiveId } from '../common/validation';
 import { calculateScore } from '../scoring/rating-calculator';
@@ -26,12 +27,12 @@ export class ReportsService {
     const state = reportPeriodState(report.year, report.month);
     const imported = report.ratingSnapshot?.source?.policy === 'preserve-source-score';
     const isLocked = Boolean(imported || report.isLocked || state.locked);
-    return { ...report, isLocked, isEditable: !imported && user?.role !== 'VIEWER' && (!isLocked || this.getEditingPolicy().historicalEditingEnabled),
+    return { ...report, isLocked, isEditable: !imported && !isReadOnlyRole(user?.role) && (!isLocked || this.getEditingPolicy().historicalEditingEnabled),
       status: report.status === 'SUBMITTED' ? 'SUBMITTED' : 'NOT_FILLED',
       score: isLocked ? report.ratingSnapshot : calculateScore(metrics, report) };
   }
   private assertCanWrite(user: Actor) {
-    if (user?.role === 'VIEWER') throw new ForbiddenException('Роль «Просмотр» доступна только для просмотра');
+    if (isReadOnlyRole(user?.role)) throw new ForbiddenException('Эта роль доступна только для просмотра');
   }
   private editable(report: any) {
     if (report.ratingSnapshot?.source?.policy === 'preserve-source-score') throw new ForbiddenException('Импортированный исторический отчёт доступен только для чтения: исходный рейтинг сохраняется.');
