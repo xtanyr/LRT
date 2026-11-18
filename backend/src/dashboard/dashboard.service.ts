@@ -26,7 +26,7 @@ export class DashboardService {
   return {...data,cities};
  }
  async getCitySummary(cityId: number,user: Actor) {
-  this.access.requireCity(user,cityId);
+  await this.access.requireCity(user,cityId);
   const data = await this.getCityLeaderDashboard(user);
   return {cityId,coffeeShops:data.coffeeShops.filter(s=>s.cityId===cityId),reports:data.reports.filter(r=>r.coffeeShop.cityId===cityId)};
  }

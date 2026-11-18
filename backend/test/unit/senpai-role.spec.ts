@@ -2,6 +2,11 @@ import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { RolesGuard } from '../../src/common/guards/roles.guard';
 import { UserRole, isReadOnlyRole } from '../../src/common/enums/user-role.enum';
 import { ReportsService } from '../../src/reports/reports.service';
+import { AccessService } from '../../src/common/access.service';
+import { CitiesController } from '../../src/cities/cities.controller';
+
+// Swagger-декораторы не нужны в юнит-тесте и не загружаются в jest-окружении проекта.
+jest.mock('@nestjs/swagger', () => new Proxy({}, { get: () => () => () => undefined }));
 
 const senpai = { id: 9, role: 'SENPAI' };
 
@@ -69,5 +74,64 @@ describe('Read-only senpai role', () => {
       expect(await service.getReportById(4, { id: 1, role: 'COO' })).toMatchObject({ isEditable: true });
       expect(await service.getReportById(4, senpai)).toMatchObject({ isEditable: false });
     });
+  });
+});
+
+describe('Senpai visibility', () => {
+  const now = new Date('2026-11-18T10:00:00Z');
+  beforeAll(() => { jest.useFakeTimers().setSystemTime(now); });
+  afterAll(() => { jest.useRealTimers(); });
+
+  const filter = {
+    assignments: {
+      some: {
+        assignedFrom: { lte: now },
+        OR: [{ assignedUntil: null }, { assignedUntil: { gt: now } }],
+        user: { role: 'LEADER', supervisors: { some: { supervisorId: 9 } } },
+      },
+    },
+  };
+  const prismaWith = (count: number) => ({
+    coffeeShop: { findUnique: jest.fn().mockResolvedValue({ id: 8, cityId: 2 }), count: jest.fn().mockResolvedValue(count) },
+  });
+
+  it('does not see everything and cannot manage', () => {
+    const service = new AccessService({} as any);
+    expect(service.global(senpai)).toBe(false);
+    expect(service.canManage(senpai)).toBe(false);
+  });
+  it('limits shops to the current assignments of supervised leaders', () => {
+    expect(new AccessService({} as any).shopWhere(senpai)).toEqual(filter);
+  });
+  it('requires an identity', () => {
+    expect(() => new AccessService({} as any).shopWhere({ role: 'SENPAI' })).toThrow(ForbiddenException);
+  });
+  it('denies a shop outside the supervised leaders', async () => {
+    const service = new AccessService(prismaWith(0) as any);
+    await expect(service.requireShop(senpai, 8)).rejects.toThrow(ForbiddenException);
+  });
+  it('allows a supervised shop', async () => {
+    const prisma = prismaWith(1);
+    await expect(new AccessService(prisma as any).requireShop(senpai, 8)).resolves.toEqual({ id: 8, cityId: 2 });
+    expect(prisma.coffeeShop.count).toHaveBeenCalledWith({ where: { id: 8, ...filter } });
+  });
+  it('denies a city without supervised shops', async () => {
+    const prisma = prismaWith(0);
+    await expect(new AccessService(prisma as any).requireCity(senpai, 2)).rejects.toThrow(ForbiddenException);
+    expect(prisma.coffeeShop.count).toHaveBeenCalledWith({ where: { cityId: 2, ...filter } });
+  });
+  it('allows a city that has supervised shops', async () => {
+    await expect(new AccessService(prismaWith(1) as any).requireCity(senpai, 2)).resolves.toBeUndefined();
+  });
+  it('keeps global roles out of the database for city checks', async () => {
+    const prisma = prismaWith(0);
+    await expect(new AccessService(prisma as any).requireCity({ id: 1, role: 'COO' }, 2)).resolves.toBeUndefined();
+    expect(prisma.coffeeShop.count).not.toHaveBeenCalled();
+  });
+  it('rejects a foreign city through the cities controller', async () => {
+    const citiesService: any = { findOne: jest.fn() };
+    const controller = new CitiesController(citiesService, new AccessService(prismaWith(0) as any));
+    await expect(controller.findOne('5', senpai)).rejects.toThrow(ForbiddenException);
+    expect(citiesService.findOne).not.toHaveBeenCalled();
   });
 });

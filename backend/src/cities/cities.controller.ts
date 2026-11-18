@@ -29,8 +29,8 @@ export class CitiesController {
   @Get(':id')
   @Roles(UserRole.ADMIN, UserRole.COO, UserRole.CITY_LEADER, UserRole.VIEWER)
   @ApiOperation({ summary: 'Get city by ID' })
-  findOne(@Param('id') id: string, @GetUser() user: any) {
-    this.access.requireCity(user, Number(id));
+  async findOne(@Param('id') id: string, @GetUser() user: any) {
+    await this.access.requireCity(user, Number(id));
     return this.citiesService.findOne(parseInt(id));
   }
 
