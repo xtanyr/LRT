@@ -35,9 +35,9 @@ export class UsersAdminService {
    }
    const effectiveRole=body.role??old.role;
    if(body.leaderIds!==undefined){
-    if(effectiveRole!=='SENPAI')throw new BadRequestException('РџРѕРґС‡РёРЅС‘РЅРЅС‹С… Р»РёРґРµСЂРѕРІ РјРѕР¶РЅРѕ РЅР°Р·РЅР°С‡РёС‚СЊ С‚РѕР»СЊРєРѕ СЂРѕР»Рё SENPAI');
-    if(body.leaderIds.includes(id))throw new BadRequestException('РќРµР»СЊР·СЏ РЅР°Р·РЅР°С‡РёС‚СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ СЃРІРѕРёРј РїРѕРґС‡РёРЅС‘РЅРЅС‹Рј');
-    if(await tx.user.count({where:{id:{in:body.leaderIds},role:'LEADER'}})!==body.leaderIds.length)throw new BadRequestException('РџРѕРґС‡РёРЅС‘РЅРЅС‹Рј РјРѕР¶РµС‚ Р±С‹С‚СЊ С‚РѕР»СЊРєРѕ Р»РёРґРµСЂ');
+    if(effectiveRole!=='SENPAI')throw new BadRequestException('Подчинённых лидеров можно назначить только роли SENPAI');
+    if(body.leaderIds.includes(id))throw new BadRequestException('Нельзя назначить пользователя своим подчинённым');
+    if(await tx.user.count({where:{id:{in:body.leaderIds},role:'LEADER'}})!==body.leaderIds.length)throw new BadRequestException('Подчинённым может быть только лидер');
     await tx.userSupervision.deleteMany({where:{supervisorId:id,leaderId:{notIn:body.leaderIds}}});
     if(body.leaderIds.length)await tx.userSupervision.createMany({data:body.leaderIds.map((leaderId:number)=>({supervisorId:id,leaderId})),skipDuplicates:true});
    } else if(old.role==='SENPAI'&&effectiveRole!=='SENPAI'){
