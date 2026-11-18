@@ -4,3 +4,7 @@
 .yearly-table td:first-child{z-index:1;background:var(--surface)}
 .yearly-table .city-average-row td:first-child{background:var(--surface-2)}
 .yearly-table.table-sticky thead th:first-child{z-index:3;background:var(--surface)}
+
+/* Pastel highlight behind each score, in the color of the digits */
+.yearly-score{--score-color:var(--ink-2);color:var(--score-color);padding:3px 8px;border-radius:6px;background:color-mix(in srgb,var(--score-color) 16%,transparent)}
+.yearly-score.is-empty{background:none}
