@@ -81,3 +81,68 @@ describe('UsersAdminService coffee shop assignment history', () => {
     }, 1)).rejects.toBeInstanceOf(BadRequestException);
   });
 });
+
+describe('UsersAdminService SENPAI supervision', () => {
+  function setup(role: string, leaderCount = 2) {
+    const user = { id: 5, name: 'S', email: 's@example.com', role, approvedAt: null, coffeeShopAssignments: [], cityAssignments: [], supervisions: [] };
+    const tx = {
+      user: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue(user),
+        update: jest.fn().mockResolvedValue(user),
+        count: jest.fn().mockResolvedValue(leaderCount),
+      },
+      userSupervision: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }), createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      configChangeLog: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = { $transaction: jest.fn((callback) => callback(tx)) };
+    return { service: new UsersAdminService(prisma as any), tx };
+  }
+
+  it('assigns unique leaders to a SENPAI and removes the others', async () => {
+    const { service, tx } = setup('LEADER');
+    await service.update(5, { role: 'SENPAI', leaderIds: [1, 2, 2] }, 1);
+    expect(tx.user.count).toHaveBeenCalledWith({ where: { id: { in: [1, 2] }, role: 'LEADER' } });
+    expect(tx.userSupervision.deleteMany).toHaveBeenCalledWith({ where: { supervisorId: 5, leaderId: { notIn: [1, 2] } } });
+    expect(tx.userSupervision.createMany).toHaveBeenCalledWith({
+      data: [{ supervisorId: 5, leaderId: 1 }, { supervisorId: 5, leaderId: 2 }],
+      skipDuplicates: true,
+    });
+    expect(tx.configChangeLog.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects ids that are not all LEADER users', async () => {
+    const { service, tx } = setup('SENPAI', 1);
+    await expect(service.update(5, { leaderIds: [1, 2] }, 1)).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.userSupervision.createMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects supervising oneself', async () => {
+    const { service } = setup('SENPAI');
+    await expect(service.update(5, { leaderIds: [5] }, 1)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects leaderIds for a user who is not SENPAI', async () => {
+    const { service, tx } = setup('LEADER');
+    await expect(service.update(5, { leaderIds: [1] }, 1)).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.userSupervision.createMany).not.toHaveBeenCalled();
+  });
+
+  it('clears all supervised leaders with an empty list', async () => {
+    const { service, tx } = setup('SENPAI', 0);
+    await service.update(5, { leaderIds: [] }, 1);
+    expect(tx.userSupervision.deleteMany).toHaveBeenCalledWith({ where: { supervisorId: 5, leaderId: { notIn: [] } } });
+    expect(tx.userSupervision.createMany).not.toHaveBeenCalled();
+  });
+
+  it('drops all supervisions when SENPAI is demoted without leaderIds', async () => {
+    const { service, tx } = setup('SENPAI');
+    await service.update(5, { role: 'COO' }, 1);
+    expect(tx.userSupervision.deleteMany).toHaveBeenCalledWith({ where: { supervisorId: 5 } });
+  });
+
+  it('does not touch supervisions for unrelated updates', async () => {
+    const { service, tx } = setup('LEADER');
+    await service.update(5, { role: 'COO' }, 1);
+    expect(tx.userSupervision.deleteMany).not.toHaveBeenCalled();
+  });
+});

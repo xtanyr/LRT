@@ -56,6 +56,7 @@ export class AdminService {
     return this.prisma.user.findMany({
       select: {
         id: true, name: true, email: true, role: true, approvedAt: true,
+        supervisions: { select: { leaderId: true } },
         cityAssignments: { include: { city: true } },
         coffeeShopAssignments: { include: { coffeeShop: { include: { city: true } } } },
       },
