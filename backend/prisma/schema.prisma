@@ -63,6 +63,8 @@ model User {
   approvedAt        DateTime?
   coffeeShopAssignments UserCoffeeShopAssignment[]
   cityAssignments   UserCityAssignment[]
+  supervisions      UserSupervision[]       @relation("SupervisorLinks")
+  supervisors       UserSupervision[]       @relation("LeaderLinks")
   authoredComments  Comment[]               @relation("CommentAuthor")
   editedReports     ReportEditLog[]         @relation("ReportEditor")
   submittedReports  MonthlyReport[]         @relation("ReportSubmitter")
@@ -112,6 +114,19 @@ model UserCityAssignment {
 
   @@unique([userId, cityId])
   @@map("user_city_assignments")
+}
+
+model UserSupervision {
+  id           Int      @id @default(autoincrement())
+  supervisorId Int
+  supervisor   User     @relation("SupervisorLinks", fields: [supervisorId], references: [id], onDelete: Cascade)
+  leaderId     Int
+  leader       User     @relation("LeaderLinks", fields: [leaderId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+
+  @@unique([supervisorId, leaderId])
+  @@index([leaderId])
+  @@map("user_supervisions")
 }
 
 model Metric {
@@ -365,6 +380,7 @@ enum UserRole {
   COO
   ADMIN
   VIEWER
+  SENPAI
 }
 
 enum MetricDirection {
