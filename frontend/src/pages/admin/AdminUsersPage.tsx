@@ -38,6 +38,9 @@ const ROLES = [
   { value: 'SENPAI', label: 'Лидер-семпай' },
 ];
 
+/** Роли, у которых есть собственная кофейня (лидер и лидер-семпай). */
+const hasOwnShop = (role: string) => role === 'LEADER' || role === 'SENPAI';
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [cities, setCities] = useState<City[]>([]);
@@ -48,7 +51,10 @@ export default function AdminUsersPage() {
   const [role, setRole] = useState('LEADER');
   const [cityIds, setCityIds] = useState<number[]>([]);
   const [shopIds, setShopIds] = useState<number[]>([]);
-  const [leaderIds, setLeaderIds] = useState<number[]>([]);
+  const [mentor, setMentor] = useState<UserRow | null>(null);
+  const [mentorLeaderIds, setMentorLeaderIds] = useState<number[]>([]);
+  const [mentorError, setMentorError] = useState('');
+  const [mentorSaving, setMentorSaving] = useState(false);
   const [leaderCityId, setLeaderCityId] = useState<number | ''>('');
   const [approvedAt, setApprovedAt] = useState('');
   const [assignmentFrom, setAssignmentFrom] = useState(new Date().toISOString().slice(0,10));
@@ -85,7 +91,6 @@ export default function AdminUsersPage() {
     setEditing(u);
     setRole(u.role);
     setCityIds(u.cityAssignments?.map(a=>a.city.id) || []);
-    setLeaderIds(u.supervisions?.map(s=>s.leaderId) || []);
     setLeaderCityId(currentShop?.cityId || '');
     setShopIds(currentShop ? [currentShop.id] : []);
     setApprovedAt(u.approvedAt?.slice(0,10)||'');
@@ -98,10 +103,33 @@ export default function AdminUsersPage() {
   const handleRoleChange = (next: string) => {
     setRole(next);
     setCityIds([]);
-    setLeaderIds([]);
-    setShopIds([]);
-    setLeaderCityId('');
+    // Лидер и лидер-семпай оба закреплены за своей кофейней: при переключении между ними выбор сохраняем.
+    if (!hasOwnShop(next)) {
+      setShopIds([]);
+      setLeaderCityId('');
+    }
     setError('');
+  };
+
+  const openMentees = (u: UserRow) => {
+    setMentor(u);
+    setMentorLeaderIds(u.supervisions?.map(s => s.leaderId) || []);
+    setMentorError('');
+  };
+
+  const saveMentees = async () => {
+    if (!mentor || mentorSaving) return;
+    setMentorSaving(true);
+    setMentorError('');
+    try {
+      await api.patch('/users/' + mentor.id, { leaderIds: mentorLeaderIds });
+      setMentor(null);
+      await load();
+    } catch {
+      setMentorError('Не удалось сохранить подопечных. Попробуйте ещё раз.');
+    } finally {
+      setMentorSaving(false);
+    }
   };
 
   const handleLeaderCityChange = (value: string) => {
@@ -114,18 +142,18 @@ export default function AdminUsersPage() {
 
   const save = async () => {
     if (!editing || saving) return;
-    if (role === 'LEADER' && (leaderCityId === '' || shopIds.length !== 1)) {
+    if (hasOwnShop(role) && (leaderCityId === '' || shopIds.length !== 1)) {
       setError('Сначала выберите город, затем кофейню.');
       return;
     }
-    if (role === 'LEADER' && (!assignmentFrom || (assignmentUntil && assignmentUntil < assignmentFrom))) {
+    if (hasOwnShop(role) && (!assignmentFrom || (assignmentUntil && assignmentUntil < assignmentFrom))) {
       setError('Укажите дату назначения. Дата снятия не может быть раньше даты назначения.');
       return;
     }
     setSaving(true);
     setError('');
     try {
-      await api.patch('/users/'+editing.id, {role, cityIds: role==='CITY_LEADER'?cityIds:[], coffeeShopIds: role==='LEADER'?shopIds:[], leaderIds: role==='SENPAI'?leaderIds:[], approvedAt:approvedAt||null, assignmentFrom, assignmentUntil});
+      await api.patch('/users/'+editing.id, {role, cityIds: role==='CITY_LEADER'?cityIds:[], coffeeShopIds: hasOwnShop(role)?shopIds:[], approvedAt:approvedAt||null, assignmentFrom, assignmentUntil});
       setOpen(false);
       await load();
     } catch {
@@ -167,9 +195,10 @@ export default function AdminUsersPage() {
                   <td className="muted">{u.email}</td>
                   <td>{ROLES.find((r) => r.value === u.role)?.label || u.role}</td>
                   <td className="muted">{u.cityAssignments?.[0]?.city.name || '—'}</td>
-                  <td className="muted">{u.role==='SENPAI'&&<div>{'Подчинённых лидеров: '+(u.supervisions?.length ?? 0)}</div>}{u.coffeeShopAssignments?.filter(a=>!a.assignedUntil).map(a=>a.coffeeShop.name).join(', ') || '—'}<div className="helper-text">{u.coffeeShopAssignments?.filter(a=>!a.assignedUntil).map(a=>'с '+new Date(a.assignedFrom).toLocaleDateString('ru-RU')).join(', ')}</div></td>
+                  <td className="muted">{u.role==='SENPAI'&&<div>{'Подопечных: '+(u.supervisions?.length ?? 0)}</div>}{u.coffeeShopAssignments?.filter(a=>!a.assignedUntil).map(a=>a.coffeeShop.name).join(', ') || '—'}<div className="helper-text">{u.coffeeShopAssignments?.filter(a=>!a.assignedUntil).map(a=>'с '+new Date(a.assignedFrom).toLocaleDateString('ru-RU')).join(', ')}</div></td>
                   <td>
                     <button className="btn btn-ghost btn-sm" onClick={() => openEdit(u)}>Настроить</button>
+                    {u.role === 'SENPAI' && <button className="btn btn-ghost btn-sm" onClick={() => openMentees(u)}>{'Подопечные (' + (u.supervisions?.length ?? 0) + ')'}</button>}
                   </td>
                 </tr>
               ))}
@@ -188,8 +217,7 @@ export default function AdminUsersPage() {
 
           <label className="field">Дата утверждения в должности<input className="input" type="date" value={approvedAt} onChange={e=>setApprovedAt(e.target.value)}/></label>
           {role==='CITY_LEADER'&&<fieldset><legend>Города</legend>{cities.map(c=><label className="field" key={c.id}><input type="checkbox" checked={cityIds.includes(c.id)} onChange={e=>setCityIds(ids=>e.target.checked?[...ids,c.id]:ids.filter(id=>id!==c.id))}/>{c.name}</label>)}</fieldset>}
-          {role==='SENPAI'&&<fieldset><legend>Подчинённые лидеры</legend>{users.filter(x=>x.role==='LEADER').map(l=><label className="field" key={l.id}><input type="checkbox" checked={leaderIds.includes(l.id)} onChange={e=>setLeaderIds(ids=>e.target.checked?[...ids,l.id]:ids.filter(id=>id!==l.id))}/>{l.name}</label>)}{!users.some(x=>x.role==='LEADER')&&<span className="helper-text">Нет пользователей с ролью «Лидер кофейни»</span>}</fieldset>}
-          {role==='LEADER'&&<div className="user-assignment-selects">
+          {hasOwnShop(role)&&<div className="user-assignment-selects">
             <label className="field">
               <span className="field-label">Город кофейни</span>
               <SelectControl
@@ -212,11 +240,30 @@ export default function AdminUsersPage() {
               {leaderCityId !== '' && cityShops.length === 0 && <span className="helper-text">В этом городе нет активных кофеен.</span>}
             </label>
           </div>}
-          {role==='LEADER'&&<><label className="field">Дата назначения на кофейню<input className="input" type="date" value={assignmentFrom} onChange={e=>setAssignmentFrom(e.target.value)}/></label><label className="field">Дата снятия с кофейни<input className="input" type="date" value={assignmentUntil} onChange={e=>setAssignmentUntil(e.target.value)}/></label></>}
+          {hasOwnShop(role)&&<><label className="field">Дата назначения на кофейню<input className="input" type="date" value={assignmentFrom} onChange={e=>setAssignmentFrom(e.target.value)}/></label><label className="field">Дата снятия с кофейни<input className="input" type="date" value={assignmentUntil} onChange={e=>setAssignmentUntil(e.target.value)}/></label></>}
           {error&&<div className="form-error" role="alert">{error}</div>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <button className="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>Отмена</button>
             <button className="btn btn-primary btn-sm" onClick={save}>{saving ? 'Сохраняем…' : 'Сохранить'}</button>
+          </div>
+        </fieldset>
+      </Modal>
+
+      <Modal open={!!mentor} title={`Подопечные: ${mentor?.name ?? ''}`} onClose={() => { if (!mentorSaving) setMentor(null); }}>
+        <fieldset className="user-edit-fields" disabled={mentorSaving}>
+          <p className="helper-text">Лидеры, чьи кофейни и отчёты этот лидер-семпай сможет просматривать. Изменять чужие отчёты он не сможет.</p>
+          {users.filter(x => x.role === 'LEADER').map(l => (
+            <label className="field" key={l.id}>
+              <input type="checkbox" checked={mentorLeaderIds.includes(l.id)} onChange={e => setMentorLeaderIds(ids => e.target.checked ? [...ids, l.id] : ids.filter(id => id !== l.id))} />
+              {l.name}
+              <span className="helper-text">{l.coffeeShopAssignments?.filter(a => !a.assignedUntil).map(a => a.coffeeShop.name).join(', ')}</span>
+            </label>
+          ))}
+          {!users.some(x => x.role === 'LEADER') && <span className="helper-text">Нет пользователей с ролью «Лидер кофейни»</span>}
+          {mentorError && <div className="form-error" role="alert">{mentorError}</div>}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setMentor(null)}>Отмена</button>
+            <button className="btn btn-primary btn-sm" onClick={saveMentees}>{mentorSaving ? 'Сохраняем…' : 'Сохранить'}</button>
           </div>
         </fieldset>
       </Modal>

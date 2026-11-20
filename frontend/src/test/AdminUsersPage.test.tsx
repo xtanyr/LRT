@@ -78,7 +78,7 @@ describe('AdminUsersPage Leader-Senpai', () => {
     role: 'SENPAI',
     approvedAt: null,
     cityAssignments: [],
-    coffeeShopAssignments: [],
+    coffeeShopAssignments: [{ coffeeShop: shops[1], assignedFrom: '2026-01-01T00:00:00.000Z', assignedUntil: null }],
     supervisions: [{ leaderId: 7 }],
   };
   const otherSenpai = { ...senpai, id: 9, name: 'Другой семпай', email: 'other@example.com', supervisions: [] };
@@ -91,47 +91,52 @@ describe('AdminUsersPage Leader-Senpai', () => {
     vi.mocked(api.patch).mockResolvedValue({ data: senpai } as any);
   });
 
-  it('shows the supervised leaders picker only for SENPAI, listing only LEADER users', async () => {
+  it('gives the SENPAI his own city and coffee shop like an ordinary leader', async () => {
     render(<AdminUsersPage />);
-    const buttons = await screen.findAllByRole('button', { name: 'Настроить' });
-
-    fireEvent.click(buttons[1]);
-    const group = screen.getByRole('group', { name: 'Подчинённые лидеры' });
-    expect(within(group).getAllByRole('checkbox')).toHaveLength(1);
-    expect(within(group).getByRole('checkbox', { name: 'Лидер' })).toBeChecked();
-    expect(within(group).queryByRole('checkbox', { name: 'Семпай' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
-
-    fireEvent.click(buttons[0]);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Настроить' }))[1]);
+    expect(screen.getByRole('button', { name: 'Город кофейни' })).toHaveTextContent('Омск');
+    expect(screen.getByRole('button', { name: 'Кофейня' })).toHaveTextContent('Кофейня B');
     expect(screen.queryByRole('group', { name: 'Подчинённые лидеры' })).not.toBeInTheDocument();
   });
 
-  it('sends the selected leaderIds when saving a SENPAI', async () => {
-    render(<AdminUsersPage />);
-    const buttons = await screen.findAllByRole('button', { name: 'Настроить' });
-    fireEvent.click(buttons[2]);
-
-    fireEvent.click(within(screen.getByRole('group', { name: 'Подчинённые лидеры' })).getByRole('checkbox', { name: 'Лидер' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
-
-    await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/users/9', expect.objectContaining({
-      role: 'SENPAI', leaderIds: [7], coffeeShopIds: [], cityIds: [],
-    })));
-  });
-
-  it('sends an empty leaderIds list for an ordinary leader', async () => {
+  it('keeps the chosen shop when the role is switched between leader and SENPAI', async () => {
     render(<AdminUsersPage />);
     fireEvent.click((await screen.findAllByRole('button', { name: 'Настроить' }))[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Роль' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Лидер-семпай' }));
+    expect(screen.getByRole('button', { name: 'Кофейня' })).toHaveTextContent('Кофейня A');
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
-
     await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/users/7', expect.objectContaining({
-      role: 'LEADER', leaderIds: [],
+      role: 'SENPAI', coffeeShopIds: [11],
     })));
   });
 
-  it('shows the number of supervised leaders in the table', async () => {
+  it('does not require mentees in the main form and does not send leaderIds there', async () => {
     render(<AdminUsersPage />);
-    expect(await screen.findByText('Подчинённых лидеров: 1')).toBeInTheDocument();
-    expect(screen.getByText('Подчинённых лидеров: 0')).toBeInTheDocument();
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Настроить' }))[2]);
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/users/9', expect.objectContaining({
+      role: 'SENPAI', coffeeShopIds: [22],
+    })));
+    expect(vi.mocked(api.patch).mock.calls[0][1]).not.toHaveProperty('leaderIds');
+  });
+
+  it('assigns mentees in a separate window, listing only LEADER users', async () => {
+    render(<AdminUsersPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Подопечные (0)' }));
+    const dialog = screen.getByRole('dialog');
+    const boxes = within(dialog).getAllByRole('checkbox');
+    expect(boxes).toHaveLength(1);
+    expect(boxes[0]).not.toBeChecked();
+    fireEvent.click(boxes[0]);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/users/9', { leaderIds: [7] }));
+  });
+
+  it('shows current mentees checked and offers the button only for SENPAI', async () => {
+    render(<AdminUsersPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Подопечные (1)' }));
+    expect(within(screen.getByRole('dialog')).getByRole('checkbox')).toBeChecked();
+    expect(screen.getAllByRole('button', { name: /^Подопечные/ })).toHaveLength(2);
   });
 });
