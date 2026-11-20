@@ -15,7 +15,7 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('leader')
-  @Roles(UserRole.LEADER, UserRole.ADMIN)
+  @Roles(UserRole.LEADER, UserRole.ADMIN, UserRole.SENPAI)
   @ApiOperation({ summary: 'Get leader dashboard' })
   getLeaderDashboard(@GetUser() user: any) {
     return this.dashboardService.getLeaderDashboard(user);

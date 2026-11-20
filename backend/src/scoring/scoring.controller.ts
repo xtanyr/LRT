@@ -19,7 +19,7 @@ export class ScoringController {
   ) {}
 
   @Get('report/:coffeeShopId/:year/:month')
-  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.SENPAI)
   @ApiOperation({ summary: 'Calculate rating for a report' })
   async calculateRating(
     @Param('coffeeShopId', ParseIntPipe) coffeeShopId: number,

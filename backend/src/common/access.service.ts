@@ -27,12 +27,17 @@ export class AccessService {
     if (this.global(user)) return {};
     if (user.role === 'LEADER') return { id: { in: (user.coffeeShopAssignments || []).map(a => a.coffeeShopId) } };
     if (user.role === 'CITY_LEADER') return { cityId: { in: (user.cityAssignments || []).map(a => a.cityId) } };
-    // Лидер-семпай: кофейни, за которыми сейчас закреплены его подчинённые лидеры.
+    // Лидер-семпай: своя кофейня + кофейни, за которыми сейчас закреплены его подчинённые лидеры.
     if (user.role === 'SENPAI') {
       return {
-        assignments: {
-          some: { ...currentAssignmentWhere(), user: { role: 'LEADER', supervisors: { some: { supervisorId: user.id } } } },
-        },
+        OR: [
+          { id: { in: (user.coffeeShopAssignments || []).map(a => a.coffeeShopId) } },
+          {
+            assignments: {
+              some: { ...currentAssignmentWhere(), user: { role: 'LEADER', supervisors: { some: { supervisorId: user.id } } } },
+            },
+          },
+        ],
       };
     }
     throw new ForbiddenException('Недостаточно прав');
@@ -46,6 +51,7 @@ export class AccessService {
     let allowed = global ||
       (user.role === 'LEADER' && user.coffeeShopAssignments?.some(a => a.coffeeShopId === id)) ||
       (user.role === 'CITY_LEADER' && user.cityAssignments?.some(a => a.cityId === shop.cityId));
+    if (!allowed && user.role === 'SENPAI' && user.coffeeShopAssignments?.some(a => a.coffeeShopId === id)) allowed = true;
     if (!allowed && user.role === 'SENPAI') {
       allowed = (await this.prisma.coffeeShop.count({ where: { id, ...this.shopWhere(user) } })) > 0;
     }

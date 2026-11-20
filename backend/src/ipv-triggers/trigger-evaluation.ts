@@ -25,7 +25,7 @@ export interface TriggerCheck {
   windowEnd: { year: number; month: number };
 }
 export function getCurrentLeaders<T extends TriggerAssignment>(assignments: T[], now = new Date()): T[] {
-  return assignments.filter(assignment => assignment.user.role === 'LEADER' && assignment.assignedFrom <= now && (!assignment.assignedUntil || assignment.assignedUntil > now));
+  return assignments.filter(assignment => (assignment.user.role === 'LEADER' || assignment.user.role === 'SENPAI') && assignment.assignedFrom <= now && (!assignment.assignedUntil || assignment.assignedUntil > now));
 }
 export function evaluateShopTriggers<T extends TriggerAssignment>(assignments: T[], reports: TriggerReport[], configs: TriggerConfiguration[], now = new Date()): { leaders: T[]; checks: TriggerCheck[] } {
   const leaders = getCurrentLeaders(assignments, now);

@@ -108,13 +108,14 @@ describe('Role lists on controllers', () => {
   it('finds the controllers', () => {
     expect(controllers.length).toBeGreaterThan(5);
   });
-  it('lets the senpai wherever the viewer is allowed, and never on a write-only list without the viewer', () => {
+  it('lists the senpai wherever the viewer or the leader is allowed (he is both: views supervised shops, runs his own)', () => {
     const missing: string[] = [];
     for (const { file, source } of controllers) {
       for (const match of source.matchAll(/@Roles\(([^)]*)\)/g)) {
         const hasViewer = match[1].includes('UserRole.VIEWER');
+        const hasLeader = /UserRole\.LEADER\b/.test(match[1]);
         const hasSenpai = match[1].includes('UserRole.SENPAI');
-        if (hasViewer !== hasSenpai) missing.push(`${file}: ${match[0]}`);
+        if ((hasViewer || hasLeader) !== hasSenpai) missing.push(`${file}: ${match[0]}`);
       }
     }
     expect(missing).toEqual([]);

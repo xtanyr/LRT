@@ -29,14 +29,14 @@ export class NotificationsController {
   }
 
   @Patch(':id/read')
-  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.SENPAI)
   @ApiOperation({ summary: 'Mark notification as read' })
   markAsRead(@Param('id') id: string, @GetUser() user: any) {
     return this.notificationsService.markAsRead(parseInt(id), user.sub);
   }
 
   @Patch('read-all')
-  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.SENPAI)
   @ApiOperation({ summary: 'Mark all notifications as read' })
   markAllAsRead(@GetUser() user: any) {
     return this.notificationsService.markAllAsRead(user.sub);

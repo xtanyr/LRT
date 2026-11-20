@@ -7,8 +7,12 @@ export enum UserRole {
   ADMIN = 'ADMIN',
 }
 
-/** Роли, которым разрешён только просмотр: любые изменяющие запросы для них запрещены. */
-export const READ_ONLY_ROLES: readonly string[] = [UserRole.VIEWER, UserRole.SENPAI];
+/**
+ * Роли, которым разрешён только просмотр: любые изменяющие запросы для них запрещены.
+ * Лидер-семпай сюда не входит: у него есть своя кофейня и свой отчёт, запись в чужие кофейни
+ * запрещается отдельно (см. ReportsService).
+ */
+export const READ_ONLY_ROLES: readonly string[] = [UserRole.VIEWER];
 
 export function isReadOnlyRole(role?: string): boolean {
   return !!role && READ_ONLY_ROLES.includes(role);

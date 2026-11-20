@@ -54,7 +54,7 @@ export class ReportsController {
   }
 
   @Post('draft')
-  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.SENPAI)
   @ApiOperation({ summary: 'Create or update draft report' })
   @ApiBody({ schema: { type: 'object', properties: { coffeeShopId: { type: 'number' }, year: { type: 'number' }, month: { type: 'number' }, revenue: { type: 'number' }, drinksCount: { type: 'number' } } } })
   createDraft(@GetUser() user: any, @Body() body: any) {
@@ -62,14 +62,14 @@ export class ReportsController {
   }
 
   @Post(':id/submit')
-  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.SENPAI)
   @ApiOperation({ summary: 'Submit report' })
   submitReport(@Param('id') id: string, @GetUser() user: any) {
     return this.reportsService.submitReport(parseInt(id), user);
   }
 
   @Patch(':id/metric-values/:metricId')
-  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.SENPAI)
   @ApiOperation({ summary: 'Update metric value in report' })
   updateMetricValue(
     @Param('id') id: string,
@@ -80,7 +80,7 @@ export class ReportsController {
   }
 
   @Patch(':id/analysis/:questionKey')
-  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN)
+  @Roles(UserRole.LEADER, UserRole.CITY_LEADER, UserRole.COO, UserRole.ADMIN, UserRole.SENPAI)
   @ApiOperation({ summary: 'Update analysis in report' })
   updateAnalysis(
     @Param('id') id: string,

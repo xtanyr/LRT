@@ -4,11 +4,14 @@ import { UserRole, isReadOnlyRole } from '../../src/common/enums/user-role.enum'
 import { ReportsService } from '../../src/reports/reports.service';
 import { AccessService } from '../../src/common/access.service';
 import { CitiesController } from '../../src/cities/cities.controller';
+import { getCurrentLeaders } from '../../src/ipv-triggers/trigger-evaluation';
 
 // Swagger-декораторы не нужны в юнит-тесте и не загружаются в jest-окружении проекта.
 jest.mock('@nestjs/swagger', () => new Proxy({}, { get: () => () => () => undefined }));
 
-const senpai = { id: 9, role: 'SENPAI' };
+// Семпай закреплён за своей кофейней 3, а подопечные работают в других кофейнях.
+const senpai = { id: 9, role: 'SENPAI', coffeeShopAssignments: [{ coffeeShopId: 3 }] };
+const viewer = { id: 5, role: 'VIEWER' };
 
 function context(user: any, method: string): ExecutionContext {
   return {
@@ -18,11 +21,11 @@ function context(user: any, method: string): ExecutionContext {
   } as any;
 }
 
-describe('Read-only senpai role', () => {
+describe('Leader-senpai role', () => {
   describe('isReadOnlyRole', () => {
-    it('is true for the viewer and the senpai only', () => {
+    it('is true for the viewer only: the senpai has his own shop and writes its report', () => {
       expect(isReadOnlyRole('VIEWER')).toBe(true);
-      expect(isReadOnlyRole('SENPAI')).toBe(true);
+      expect(isReadOnlyRole('SENPAI')).toBe(false);
       expect(isReadOnlyRole('COO')).toBe(false);
       expect(isReadOnlyRole(undefined)).toBe(false);
     });
@@ -34,21 +37,22 @@ describe('Read-only senpai role', () => {
     it('lets the senpai read endpoints that list the role', () => {
       expect(guard([UserRole.COO, UserRole.SENPAI]).canActivate(context(senpai, 'GET'))).toBe(true);
     });
-    it('denies a read endpoint that does not list the senpai role', () => {
+    it('denies an endpoint that does not list the senpai role', () => {
       expect(() => guard([UserRole.COO]).canActivate(context(senpai, 'GET'))).toThrow(ForbiddenException);
+      expect(() => guard([UserRole.COO]).canActivate(context(senpai, 'POST'))).toThrow(ForbiddenException);
     });
-    it.each(['POST', 'PATCH', 'PUT', 'DELETE'])('denies %s even when the route has no role restriction', (method) => {
-      expect(() => guard(undefined).canActivate(context(senpai, method))).toThrow(ForbiddenException);
+    it('lets the senpai write on endpoints that list the role (the report of his own shop)', () => {
+      expect(guard([UserRole.LEADER, UserRole.SENPAI]).canActivate(context(senpai, 'POST'))).toBe(true);
     });
-    it('denies a write even when the senpai role is listed by mistake', () => {
-      expect(() => guard([UserRole.SENPAI]).canActivate(context(senpai, 'POST'))).toThrow(ForbiddenException);
+    it.each(['POST', 'PATCH', 'PUT', 'DELETE'])('still denies %s for the viewer', (method) => {
+      expect(() => guard(undefined).canActivate(context(viewer, method))).toThrow(ForbiddenException);
     });
     it('does not change access for the COO', () => {
       expect(guard([UserRole.COO]).canActivate(context({ id: 1, role: 'COO' }, 'POST'))).toBe(true);
     });
   });
 
-  describe('ReportsService', () => {
+  describe('ReportsService writes', () => {
     function setup(config = 'true') {
       const report: any = { id: 4, coffeeShopId: 8, year: 2026, month: 1, isLocked: true, status: 'SUBMITTED', revenue: 100, drinksCount: 10, metricValues: [], analyses: [], ratingSnapshot: { rating: 50 } };
       const prisma: any = {
@@ -57,22 +61,36 @@ describe('Read-only senpai role', () => {
       };
       const access: any = { requireReport: jest.fn().mockResolvedValue(report), requireShop: jest.fn().mockResolvedValue({ id: 8, isActive: true }) };
       const service = new ReportsService(prisma, access, { get: jest.fn().mockReturnValue(config) } as any);
-      return { service, prisma };
+      return { service, prisma, access };
     }
 
-    it('refuses to create or update a draft', async () => {
+    it('refuses to create or update a draft in a shop that is not his own', async () => {
       const { service, prisma } = setup();
       await expect(service.createOrUpdateDraft({ coffeeShopId: 8, year: 2026, month: 10, revenue: 1 }, senpai)).rejects.toBeInstanceOf(ForbiddenException);
       expect(prisma.monthlyReport.upsert).not.toHaveBeenCalled();
     });
-    it('refuses to submit a report', async () => {
+    it('refuses to submit the report of a supervised leader', async () => {
       const { service } = setup();
       await expect(service.submitReport(4, senpai)).rejects.toBeInstanceOf(ForbiddenException);
     });
-    it('reports a report as not editable for the senpai even when historical editing is enabled', async () => {
-      const { service } = setup('true');
+    it('lets the senpai write a draft in his own shop', async () => {
+      const { service, access } = setup('false');
+      access.requireShop.mockResolvedValue({ id: 3, isActive: true });
+      // Дошли до проверки периода: запись в своей кофейне запрещена не ролью, а закрытым месяцем.
+      await expect(service.createOrUpdateDraft({ coffeeShopId: 3, year: 2026, month: 1, revenue: 1 }, senpai)).rejects.toThrow(/Исторический/);
+    });
+    it('still refuses every write for the viewer', async () => {
+      const { service } = setup();
+      await expect(service.createOrUpdateDraft({ coffeeShopId: 8, year: 2026, month: 10, revenue: 1 }, viewer)).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.submitReport(4, viewer)).rejects.toBeInstanceOf(ForbiddenException);
+    });
+    it('marks a report editable only in the senpai own shop (viewer never)', async () => {
+      const { service, prisma } = setup('true');
       expect(await service.getReportById(4, { id: 1, role: 'COO' })).toMatchObject({ isEditable: true });
       expect(await service.getReportById(4, senpai)).toMatchObject({ isEditable: false });
+      prisma.monthlyReport.findUnique.mockResolvedValue({ id: 5, coffeeShopId: 3, year: 2026, month: 1, isLocked: true, status: 'SUBMITTED', revenue: 100, drinksCount: 10, metricValues: [], analyses: [], ratingSnapshot: { rating: 50 } });
+      expect(await service.getReportById(5, senpai)).toMatchObject({ isEditable: true });
+      expect(await service.getReportById(5, viewer)).toMatchObject({ isEditable: false });
     });
   });
 });
@@ -82,14 +100,20 @@ describe('Senpai visibility', () => {
   beforeAll(() => { jest.useFakeTimers().setSystemTime(now); });
   afterAll(() => { jest.useRealTimers(); });
 
+  // Своя кофейня + кофейни, где сейчас работают подопечные лидеры.
   const filter = {
-    assignments: {
-      some: {
-        assignedFrom: { lte: now },
-        OR: [{ assignedUntil: null }, { assignedUntil: { gt: now } }],
-        user: { role: 'LEADER', supervisors: { some: { supervisorId: 9 } } },
+    OR: [
+      { id: { in: [3] } },
+      {
+        assignments: {
+          some: {
+            assignedFrom: { lte: now },
+            OR: [{ assignedUntil: null }, { assignedUntil: { gt: now } }],
+            user: { role: 'LEADER', supervisors: { some: { supervisorId: 9 } } },
+          },
+        },
       },
-    },
+    ],
   };
   const prismaWith = (count: number) => ({
     coffeeShop: { findUnique: jest.fn().mockResolvedValue({ id: 8, cityId: 2 }), count: jest.fn().mockResolvedValue(count) },
@@ -100,27 +124,32 @@ describe('Senpai visibility', () => {
     expect(service.global(senpai)).toBe(false);
     expect(service.canManage(senpai)).toBe(false);
   });
-  it('limits shops to the current assignments of supervised leaders', () => {
+  it('sees his own shop and the current shops of supervised leaders', () => {
     expect(new AccessService({} as any).shopWhere(senpai)).toEqual(filter);
+  });
+  it('without an own shop only the supervised shops remain', () => {
+    const where = new AccessService({} as any).shopWhere({ id: 9, role: 'SENPAI' });
+    expect(where.OR[0]).toEqual({ id: { in: [] } });
+    expect(where.OR).toHaveLength(2);
   });
   it('requires an identity', () => {
     expect(() => new AccessService({} as any).shopWhere({ role: 'SENPAI' })).toThrow(ForbiddenException);
   });
-  it('denies a shop outside the supervised leaders', async () => {
+  it('denies a shop that is neither his own nor supervised', async () => {
     const service = new AccessService(prismaWith(0) as any);
     await expect(service.requireShop(senpai, 8)).rejects.toThrow(ForbiddenException);
   });
-  it('allows a supervised shop', async () => {
+  it('allows a visible shop', async () => {
     const prisma = prismaWith(1);
     await expect(new AccessService(prisma as any).requireShop(senpai, 8)).resolves.toEqual({ id: 8, cityId: 2 });
     expect(prisma.coffeeShop.count).toHaveBeenCalledWith({ where: { id: 8, ...filter } });
   });
-  it('denies a city without supervised shops', async () => {
+  it('denies a city without visible shops', async () => {
     const prisma = prismaWith(0);
     await expect(new AccessService(prisma as any).requireCity(senpai, 2)).rejects.toThrow(ForbiddenException);
     expect(prisma.coffeeShop.count).toHaveBeenCalledWith({ where: { cityId: 2, ...filter } });
   });
-  it('allows a city that has supervised shops', async () => {
+  it('allows a city that has visible shops', async () => {
     await expect(new AccessService(prismaWith(1) as any).requireCity(senpai, 2)).resolves.toBeUndefined();
   });
   it('keeps global roles out of the database for city checks', async () => {
@@ -133,5 +162,15 @@ describe('Senpai visibility', () => {
     const controller = new CitiesController(citiesService, new AccessService(prismaWith(0) as any));
     await expect(controller.findOne('5', senpai)).rejects.toThrow(ForbiddenException);
     expect(citiesService.findOne).not.toHaveBeenCalled();
+  });
+});
+
+describe('Senpai as the leader of his own shop', () => {
+  const assignment = (role: string) => ({ assignedFrom: new Date('2026-01-01'), assignedUntil: null, user: { role } }) as any;
+  it('counts a senpai as a current leader of the shop, like an ordinary leader', () => {
+    const now = new Date('2026-11-18T10:00:00Z');
+    expect(getCurrentLeaders([assignment('SENPAI')], now)).toHaveLength(1);
+    expect(getCurrentLeaders([assignment('LEADER')], now)).toHaveLength(1);
+    expect(getCurrentLeaders([assignment('COO'), assignment('CITY_LEADER'), assignment('VIEWER')], now)).toHaveLength(0);
   });
 });

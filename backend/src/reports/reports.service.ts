@@ -27,12 +27,20 @@ export class ReportsService {
     const state = reportPeriodState(report.year, report.month);
     const imported = report.ratingSnapshot?.source?.policy === 'preserve-source-score';
     const isLocked = Boolean(imported || report.isLocked || state.locked);
-    return { ...report, isLocked, isEditable: !imported && !isReadOnlyRole(user?.role) && (!isLocked || this.getEditingPolicy().historicalEditingEnabled),
+    return { ...report, isLocked, isEditable: !imported && !isReadOnlyRole(user?.role) && this.ownsShopForWrite(user, report.coffeeShopId) && (!isLocked || this.getEditingPolicy().historicalEditingEnabled),
       status: report.status === 'SUBMITTED' ? 'SUBMITTED' : 'NOT_FILLED',
       score: isLocked ? report.ratingSnapshot : calculateScore(metrics, report) };
   }
   private assertCanWrite(user: Actor) {
     if (isReadOnlyRole(user?.role)) throw new ForbiddenException('Эта роль доступна только для просмотра');
+  }
+  /** Лидер-семпай пишет только в свою кофейню; кофейни подопечных он лишь просматривает. */
+  private ownsShopForWrite(user: Actor | undefined, coffeeShopId: number) {
+    if (user?.role !== 'SENPAI') return true;
+    return !!user.coffeeShopAssignments?.some(a => a.coffeeShopId === coffeeShopId);
+  }
+  private assertCanWriteShop(user: Actor, coffeeShopId: number) {
+    if (!this.ownsShopForWrite(user, coffeeShopId)) throw new ForbiddenException('Чужие кофейни доступны лидеру-семпаю только для просмотра');
   }
   private editable(report: any) {
     if (report.ratingSnapshot?.source?.policy === 'preserve-source-score') throw new ForbiddenException('Импортированный исторический отчёт доступен только для чтения: исходный рейтинг сохраняется.');
@@ -58,6 +66,7 @@ export class ReportsService {
     if (!data || typeof data !== 'object' || (data.metricValues !== undefined && !Array.isArray(data.metricValues)) || (data.analyses !== undefined && !Array.isArray(data.analyses)) || (data.formData !== undefined && (!data.formData || typeof data.formData !== 'object' || Array.isArray(data.formData)))) throw new BadRequestException('Некорректная структура отчёта');
     this.assertCanWrite(user);
     const coffeeShopId = positiveId(data.coffeeShopId), year = Number(data.year), month = Number(data.month);
+    this.assertCanWriteShop(user, coffeeShopId);
     const shop = await this.access.requireShop(user, coffeeShopId);
     if (!shop.isActive) throw new ForbiddenException('Кофейня закрыта');
     this.editable({ year, month });
@@ -127,7 +136,8 @@ export class ReportsService {
   }
   async submitReport(id: number, user: Actor) {
     this.assertCanWrite(user);
-    await this.access.requireReport(user, id);
+    const target = await this.access.requireReport(user, id);
+    this.assertCanWriteShop(user, target.coffeeShopId);
     return this.prisma.$transaction(async tx => {
       const report = await tx.monthlyReport.findUniqueOrThrow({ where: { id }, include: includeReport });
       this.editable(report);
