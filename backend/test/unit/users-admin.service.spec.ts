@@ -146,3 +146,35 @@ describe('UsersAdminService SENPAI supervision', () => {
     expect(tx.userSupervision.deleteMany).not.toHaveBeenCalled();
   });
 });
+
+describe('UsersAdminService admin form payload', () => {
+  function setup(role: string) {
+    const user = { id: 5, name: 'U', email: 'u@example.com', role, approvedAt: null, coffeeShopAssignments: [], cityAssignments: [], supervisions: [] };
+    const tx = {
+      user: { findUniqueOrThrow: jest.fn().mockResolvedValue(user), update: jest.fn().mockResolvedValue(user), count: jest.fn().mockResolvedValue(0) },
+      userSupervision: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }), createMany: jest.fn() },
+      coffeeShop: { count: jest.fn().mockResolvedValue(0) },
+      city: { count: jest.fn().mockResolvedValue(0) },
+      userCoffeeShopAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      userCityAssignment: { deleteMany: jest.fn() },
+      configChangeLog: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = { $transaction: jest.fn((callback) => callback(tx)) };
+    return { service: new UsersAdminService(prisma as any), tx };
+  }
+
+  it.each(['LEADER', 'COO', 'VIEWER', 'ADMIN', 'CITY_LEADER'])(
+    'saves a %s when the form sends the usual payload with an empty leaderIds list',
+    async (role) => {
+      const { service, tx } = setup(role);
+      await expect(service.update(5, { role, cityIds: [], coffeeShopIds: [], leaderIds: [], approvedAt: null }, 1)).resolves.toBeDefined();
+      expect(tx.user.update).toHaveBeenCalled();
+      expect(tx.userSupervision.createMany).not.toHaveBeenCalled();
+    },
+  );
+
+  it('still rejects a non-empty leaderIds list for a user who is not SENPAI', async () => {
+    const { service } = setup('LEADER');
+    await expect(service.update(5, { role: 'LEADER', leaderIds: [1] }, 1)).rejects.toBeInstanceOf(BadRequestException);
+  });
+});

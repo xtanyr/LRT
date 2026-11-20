@@ -35,7 +35,7 @@ export class UsersAdminService {
    }
    const effectiveRole=body.role??old.role;
    if(body.leaderIds!==undefined){
-    if(effectiveRole!=='SENPAI')throw new BadRequestException('Подчинённых лидеров можно назначить только роли SENPAI');
+    if(effectiveRole!=='SENPAI'&&body.leaderIds.length)throw new BadRequestException('Подчинённых лидеров можно назначить только роли SENPAI');
     if(body.leaderIds.includes(id))throw new BadRequestException('Нельзя назначить пользователя своим подчинённым');
     if(await tx.user.count({where:{id:{in:body.leaderIds},role:'LEADER'}})!==body.leaderIds.length)throw new BadRequestException('Подчинённым может быть только лидер');
     await tx.userSupervision.deleteMany({where:{supervisorId:id,leaderId:{notIn:body.leaderIds}}});
