@@ -102,7 +102,7 @@ export default function LeaderReportPage() {
  exampleParams.set('period',period);
  if(shopId)exampleParams.set('shop',String(shopId));
  const auth=useContext(AuthContext);
- const viewerOnly=['VIEWER','SENPAI'].includes((auth?.viewAsRole||auth?.user?.role) as string);
+ const viewerOnly=['VIEWER'].includes((auth?.viewAsRole||auth?.user?.role) as string);
  const historical=Boolean(report?.isLocked||Date.now()>=Date.UTC(year,month,11,9));
  const locked=viewerOnly||(typeof report?.isEditable==='boolean'?!report.isEditable:!historicalEditingEnabled&&historical);
  const fieldDisabled=locked||(saving&&!automaticSaveInFlight.current);
@@ -113,7 +113,7 @@ export default function LeaderReportPage() {
  useEffect(()=>{
   let alive=true;
   Promise.all([api.get('/metrics'),api.get('/coffee-shops'),api.get('/admin/analysis-questions'),api.get('/reports/editing-policy').catch(()=>({data:{historicalEditingEnabled:false}}))]).then(([m,s,q,policy])=>{
-   if(!alive)return; setMetrics(unwrap(m));setQuestions(unwrap(q));setHistoricalEditingEnabled(unwrap(policy)?.historicalEditingEnabled===true);const list=unwrap(s) as CoffeeShopOption[];setShops(list);const requested=Number(params.get('shop'));setShopId(list.some(shop=>shop.id===requested)?requested:list[0]?.id||0);if(!list.length)setLoading(false);
+   if(!alive)return; setMetrics(unwrap(m));setQuestions(unwrap(q));setHistoricalEditingEnabled(unwrap(policy)?.historicalEditingEnabled===true);const allShops=unwrap(s) as CoffeeShopOption[];const ownIds=(auth?.user?.coffeeShops||[]).map((shop:{id:number})=>shop.id);const list=auth?.user?.role==='SENPAI'?allShops.filter(shop=>ownIds.includes(shop.id)):allShops;setShops(list);const requested=Number(params.get('shop'));setShopId(list.some(shop=>shop.id===requested)?requested:list[0]?.id||0);if(!list.length)setLoading(false);
   }).catch(e=>{if(alive){setError(message(e));setLoading(false);}});
   return()=>{alive=false;};
  },[]);

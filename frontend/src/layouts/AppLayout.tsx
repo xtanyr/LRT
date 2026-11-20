@@ -34,6 +34,8 @@ const ROLE_MENUS: Record<UserRole, { label: string; to: string }[]> = {
     { label: 'Отчёты по месяцам', to: '/reports' },
   ],
   SENPAI: [
+    { label: 'Мой отчёт', to: '/report' },
+    { label: 'Мои результаты', to: '/results' },
     { label: 'Дашборд', to: '/' },
     { label: 'Рейтинги за год', to: '/yearly-ratings' },
     { label: 'Отчёты по месяцам', to: '/reports' },
@@ -95,7 +97,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const role = viewAsRole || user?.role || 'LEADER';
   const menu = ROLE_MENUS[role];
-  const assignmentLabel = role === 'LEADER'
+  const assignmentLabel = role === 'LEADER' || role === 'SENPAI'
     ? user?.coffeeShops?.map((shop) => shop.name).join(' · ')
     : role === 'CITY_LEADER'
       ? user?.cities?.map((city) => city.name).join(' · ')

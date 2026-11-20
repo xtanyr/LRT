@@ -8,7 +8,8 @@ import { isPendingTriggerSuppressed, triggerLeaderInclude } from '../ipv-trigger
 export class DashboardService {
  constructor(private readonly prisma: PrismaService, private readonly access: AccessService, private readonly reports: ReportsService) {}
  async getLeaderDashboard(user: Actor) {
-  return this.getCityLeaderDashboard(user);
+  // «Мои результаты» лидера-семпая — это его собственная кофейня; кофейни подопечных смотрятся в общих разделах.
+  return this.getCityLeaderDashboard(user.role === 'SENPAI' ? { ...user, role: 'LEADER' } : user);
  }
  async getCityLeaderDashboard(user: Actor) {
   const shops = await this.prisma.coffeeShop.findMany({where: {AND:[this.access.shopWhere(user)],isActive:true},include:{city:true,...triggerLeaderInclude}});

@@ -39,7 +39,7 @@ export default function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route index element={<DashboardPage />} />
-        <Route path="results" element={<RequireRole roles={['LEADER']}><LeaderResultsPage /></RequireRole>} />
+        <Route path="results" element={<RequireRole roles={['LEADER', 'SENPAI']}><LeaderResultsPage /></RequireRole>} />
         <Route path="methodology" element={<LeaderMethodologyPage />} />
         <Route path="report" element={<LeaderReportPage />} />
         <Route path="report-example" element={<ReportExamplePage />} />

@@ -165,6 +165,18 @@ describe('Senpai visibility', () => {
   });
 });
 
+describe('Senpai personal results', () => {
+  it('leader dashboard of a senpai is built as an ordinary leader: own shop only, mentees excluded', async () => {
+    const { DashboardService } = require('../../src/dashboard/dashboard.service');
+    const service = Object.create(DashboardService.prototype);
+    service.getCityLeaderDashboard = jest.fn().mockResolvedValue('ok');
+    await expect(service.getLeaderDashboard(senpai)).resolves.toBe('ok');
+    expect(service.getCityLeaderDashboard).toHaveBeenCalledWith({ ...senpai, role: 'LEADER' });
+    await service.getLeaderDashboard({ id: 1, role: 'LEADER' });
+    expect(service.getCityLeaderDashboard).toHaveBeenLastCalledWith({ id: 1, role: 'LEADER' });
+  });
+});
+
 describe('Senpai as the leader of his own shop', () => {
   const assignment = (role: string) => ({ assignedFrom: new Date('2026-01-01'), assignedUntil: null, user: { role } }) as any;
   it('counts a senpai as a current leader of the shop, like an ordinary leader', () => {
